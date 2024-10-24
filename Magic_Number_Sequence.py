@@ -184,38 +184,7 @@ class TDSTLevels:
             return float(price) < self.active_support  # Convert to float        
         return False
 
-class TDSTLevels:
-    def __init__(self):
-        self.resistance_levels = []
-        self.support_levels = []
-        self.active_resistance = None
-        self.active_support = None
-    
-    def add_resistance(self, price, date):
-        try:
-            float_price = float(price)
-            self.resistance_levels.append((float_price, date))
-            self.active_resistance = float_price
-        except:
-            pass
-    
-    def add_support(self, price, date):
-        try:
-            float_price = float(price)
-            self.support_levels.append((float_price, date))
-            self.active_support = float_price
-        except:
-            pass
-    
-    def check_resistance_violation(self, price):
-        if self.active_resistance is not None:
-            return safe_compare(price, self.active_resistance, '>')
-        return False
-    
-    def check_support_violation(self, price):
-        if self.active_support is not None:
-            return safe_compare(price, self.active_support, '<')
-        return False
+
 
 def calculate_td_sequential(df):
     buy_setup = np.zeros(len(df))
