@@ -29,14 +29,22 @@ def download_data():
     start_date = end_date - timedelta(days=500)  # Download 500 days
     display_start = end_date - timedelta(days=365)  # Show 1 year
     
-    # Convert to date objects
+    # Format dates for yfinance
+    start_str = start_date.strftime('%Y-%m-%d')
+    end_str = end_date.strftime('%Y-%m-%d')
+    
+    # Download data - keep datetime index
+    df = yf.download(ticker, start=start_str, end=end_str)
+    
+    # Keep datetime index for plotly
     display_start = display_start.date()
     end_date = end_date.date()
-    start_date = start_date.date()
     
-    # Download data
-    df = yf.download(ticker, start=start_date, end=end_date)
-    df.index = df.index.date
+    # Debug data
+    st.write("Data downloaded:", len(df), "rows")
+    st.write("Index type:", type(df.index))
+    st.write("First date:", df.index[0])
+    st.write("Last date:", df.index[-1])
     
     return df, display_start, end_date
 
@@ -184,8 +192,6 @@ class TDSTLevels:
         if self.active_support is not None:
             return float(price) < self.active_support  # Convert to float        
         return False
-
-
 
 def calculate_td_sequential(df):
     buy_setup = np.zeros(len(df))
@@ -360,8 +366,13 @@ def calculate_td_sequential(df):
 
 def create_td_sequential_chart(df, start_date, end_date):
     # Filter data
-    mask = (df.index >= start_date) & (df.index <= end_date)
+    mask = (df.index.date >= start_date) & (df.index.date <= end_date)
     df_filtered = df[mask].copy()
+    
+    # Debug filtered data
+    st.write("Filtered data:", len(df_filtered), "rows")
+    st.write("First filtered date:", df_filtered.index[0])
+    st.write("Last filtered date:", df_filtered.index[-1])
     
     # Create figure with only candlesticks
     fig = go.Figure()
@@ -369,7 +380,7 @@ def create_td_sequential_chart(df, start_date, end_date):
     # Add candlestick trace
     fig.add_trace(
         go.Candlestick(
-            x=df_filtered.index,
+            x=df_filtered.index,  # Keep datetime index
             open=df_filtered['Open'],
             high=df_filtered['High'],
             low=df_filtered['Low'],
@@ -389,6 +400,7 @@ def create_td_sequential_chart(df, start_date, end_date):
             rangeslider=dict(visible=False)
         ),
         height=800,
+        width=None,  # Let Streamlit handle width
         paper_bgcolor='white',
         plot_bgcolor='white'
     )
@@ -397,15 +409,25 @@ def create_td_sequential_chart(df, start_date, end_date):
 
 def main():
     try:
+        st.write("Starting data download...")
         df, display_start, end_date = download_data()
+        
         if df.empty:
             st.error("No data available for the selected stock")
             return
             
-        # Create basic candlestick chart
+        st.write("Data shape:", df.shape)
+        st.write("Sample data:")
+        st.write(df.head())
+        
         fig = create_td_sequential_chart(df, display_start, end_date)
         if fig is not None:
+            st.write("Rendering chart...")
             st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.error("Failed to create chart")
             
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
+        import traceback
+        st.write("Full error:", traceback.format_exc())
