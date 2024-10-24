@@ -359,43 +359,35 @@ def calculate_td_sequential(df):
     return buy_setup, sell_setup, buy_countdown, sell_countdown, buy_perfection, sell_perfection, buy_deferred, sell_deferred, tdst
 
 def create_td_sequential_chart(df, start_date, end_date):
-    if df.empty:
-        st.error("No data available for the selected date range")
-        return None
-        
-    # Filter data first
+    # Filter data
     mask = (df.index >= start_date) & (df.index <= end_date)
     df_filtered = df[mask].copy()
     
-    if df_filtered.empty:
-        st.error("No data available for the selected date range")
-        return None
-
-    # Debug prints
-    st.write("Filtered data shape:", df_filtered.shape)
-    st.write("First date:", df_filtered.index[0])
-    st.write("Last date:", df_filtered.index[-1])
-    st.write("Price range:", df_filtered['Low'].min(), "to", df_filtered['High'].max())
-
-    # Create base figure with just candlesticks first
-    fig = go.Figure(data=[
+    # Create figure with only candlesticks
+    fig = go.Figure()
+    
+    # Add candlestick trace
+    fig.add_trace(
         go.Candlestick(
             x=df_filtered.index,
             open=df_filtered['Open'],
             high=df_filtered['High'],
             low=df_filtered['Low'],
-            close=df_filtered['Close'],
-            name=ticker,
-            increasing_line_color='#26A69A',
-            decreasing_line_color='#EF5350'
+            close=df_filtered['Close']
         )
-    ])
+    )
 
     # Basic layout
     fig.update_layout(
         title=f'Magic Number Sequence Analysis - {ticker}',
-        yaxis_title='Price',
-        xaxis_title='Date',
+        yaxis=dict(
+            title='Price',
+            side='right'
+        ),
+        xaxis=dict(
+            title='Date',
+            rangeslider=dict(visible=False)
+        ),
         height=800,
         paper_bgcolor='white',
         plot_bgcolor='white'
@@ -405,33 +397,15 @@ def create_td_sequential_chart(df, start_date, end_date):
 
 def main():
     try:
-        st.write("Starting data download...")
         df, display_start, end_date = download_data()
-        
         if df.empty:
             st.error("No data available for the selected stock")
             return
             
-        st.write("Data loaded successfully")
-        st.write(f"Data shape: {df.shape}")
-        
-        # Show sample of the data to verify
-        st.write("Sample data:")
-        st.write(df.head())
-        
-        # Create basic chart first
+        # Create basic candlestick chart
         fig = create_td_sequential_chart(df, display_start, end_date)
-        
         if fig is not None:
-            st.write("Chart created successfully")
-            # Try rendering with minimal configuration
             st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.error("Failed to create chart - returned None")
             
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
-        st.write("Full error:", traceback.format_exc())
-
-if __name__ == "__main__":
-    main()
