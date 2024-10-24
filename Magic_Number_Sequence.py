@@ -456,32 +456,40 @@ def create_td_sequential_chart(df, start_date, end_date):
     y_min = float(df_filtered['Low'].min() - (price_range * 0.1))
     y_max = float(df_filtered['High'].max() + (price_range * 0.1))
     
-    # Add TrendLine levels
+    # Add TrendLine levels with horizontal lines
     for i, (level, date) in enumerate(tdst.resistance_levels):
         if date in df_filtered.index:
             date_idx = df_filtered.index.get_loc(date)
             end_idx = min(date_idx + 30, len(df_filtered.index) - 1)
             end_date = df_filtered.index[end_idx]
             
+            # Add horizontal line shape
             fig.add_shape(
                 type="line",
                 x0=date,
                 x1=end_date,
-                y0=level,
-                y1=level,
-                line=dict(color="red", width=1, dash="dash"),
-                yref='y'
+                y0=float(level),  # Convert to float and use same value for y0 and y1
+                y1=float(level),  # This ensures the line is horizontal
+                line=dict(
+                    color="red",
+                    width=1,
+                    dash="dash"
+                ),
+                yref='y',
+                xref='x'
             )
             
+            # Add label at the end of line
             fig.add_annotation(
                 x=end_date,
-                y=level,
+                y=float(level),
                 text=f"TrendLine R{len(tdst.resistance_levels)-i}",
                 showarrow=False,
                 xanchor="left",
                 xshift=10,
                 font=dict(color="red", size=10),
-                yref='y'
+                yref='y',
+                xref='x'
             )
     
     for i, (level, date) in enumerate(tdst.support_levels):
@@ -490,107 +498,57 @@ def create_td_sequential_chart(df, start_date, end_date):
             end_idx = min(date_idx + 30, len(df_filtered.index) - 1)
             end_date = df_filtered.index[end_idx]
             
+            # Add horizontal line shape
             fig.add_shape(
                 type="line",
                 x0=date,
                 x1=end_date,
-                y0=level,
-                y1=level,
-                line=dict(color="green", width=1, dash="dash"),
-                yref='y'
+                y0=float(level),  # Convert to float and use same value for y0 and y1
+                y1=float(level),  # This ensures the line is horizontal
+                line=dict(
+                    color="green",
+                    width=1,
+                    dash="dash"
+                ),
+                yref='y',
+                xref='x'
             )
             
+            # Add label at the end of line
             fig.add_annotation(
                 x=end_date,
-                y=level,
+                y=float(level),
                 text=f"TrendLine S{len(tdst.support_levels)-i}",
                 showarrow=False,
                 xanchor="left",
                 xshift=10,
                 font=dict(color="green", size=10),
-                yref='y'
+                yref='y',
+                xref='x'
             )
-    
-    # Add setup and countdown annotations
-    for i, idx in enumerate(df_filtered.index):
-        orig_idx = df.index.get_loc(idx)
-        current_price = float(df_filtered['Low'].iloc[i])
-        
-        # Buy setup counts
-        if buy_setup[orig_idx] > 0:
-            count_text = str(int(buy_setup[orig_idx]))
-            font_size = 13 if buy_setup[orig_idx] == 9 else 10
-            if buy_setup[orig_idx] == 9:
-                if buy_perfection[orig_idx]:
-                    count_text += "↑"
-                else:
-                    count_text += "+"
-            fig.add_annotation(
-                x=idx,
-                y=current_price,
-                text=count_text,
-                showarrow=False,
-                yshift=-10,
-                font=dict(color="green", size=font_size),
-                yref='y'
+
+    # Add candlestick with specific styling
+    fig.add_trace(
+        go.Candlestick(
+            x=df_filtered.index,
+            open=df_filtered['Open'],
+            high=df_filtered['High'],
+            low=df_filtered['Low'],
+            close=df_filtered['Close'],
+            name='AAPL',
+            opacity=1.0,
+            increasing=dict(
+                line=dict(color='#26A69A', width=1),
+                fillcolor='#26A69A'
+            ),
+            decreasing=dict(
+                line=dict(color='#EF5350', width=1),
+                fillcolor='#EF5350'
             )
-        
-        # Buy countdown counts
-        if buy_countdown[orig_idx] > 0 or buy_deferred[orig_idx]:
-            if buy_deferred[orig_idx]:
-                count_text = "+"
-            else:
-                count_text = str(int(buy_countdown[orig_idx]))
-            font_size = 13 if buy_countdown[orig_idx] == 13 else 10
-            fig.add_annotation(
-                x=idx,
-                y=current_price,
-                text=count_text,
-                showarrow=False,
-                yshift=-25,
-                font=dict(color="red", size=font_size),
-                yref='y'
-            )
-        
-        current_price = float(df_filtered['High'].iloc[i])
-        
-        # Sell setup counts
-        if sell_setup[orig_idx] > 0:
-            count_text = str(int(sell_setup[orig_idx]))
-            font_size = 13 if sell_setup[orig_idx] == 9 else 10
-            if sell_setup[orig_idx] == 9:
-                if sell_perfection[orig_idx]:
-                    count_text += "↓"
-                else:
-                    count_text += "+"
-            fig.add_annotation(
-                x=idx,
-                y=current_price,
-                text=count_text,
-                showarrow=False,
-                yshift=10,
-                font=dict(color="green", size=font_size),
-                yref='y'
-            )
-        
-        # Sell countdown counts
-        if sell_countdown[orig_idx] > 0 or sell_deferred[orig_idx]:
-            if sell_deferred[orig_idx]:
-                count_text = "+"
-            else:
-                count_text = str(int(sell_countdown[orig_idx]))
-            font_size = 13 if sell_countdown[orig_idx] == 13 else 10
-            fig.add_annotation(
-                x=idx,
-                y=current_price,
-                text=count_text,
-                showarrow=False,
-                yshift=25,
-                font=dict(color="red", size=font_size),
-                yref='y'
-            )
-    
-    # Update layout
+        )
+    )
+
+    # Update layout for proper scaling and display
     fig.update_layout(
         title=f'Magic Number Sequence Analysis - {ticker}',
         yaxis_title='Price',
@@ -600,32 +558,32 @@ def create_td_sequential_chart(df, start_date, end_date):
         paper_bgcolor='white',
         plot_bgcolor='white',
         yaxis=dict(
-            range=[y_min, y_max],
-            autorange=False,
-            fixedrange=False,
+            title='Price',
+            side='right',
             gridcolor='lightgrey',
             showgrid=True,
-            side='right',
-            title='Price'
+            zeroline=False,
+            autorange=True,
+            type='linear',
+            fixedrange=False
         ),
         xaxis=dict(
             rangeslider=dict(visible=False),
             type='category',
             gridcolor='lightgrey',
-            showgrid=True
+            showgrid=True,
+            zeroline=False
         ),
         margin=dict(l=50, r=50, t=50, b=50)
     )
-    
-    # Update axes to ensure proper display
-    fig.update_yaxes(autorange=True)
-    fig.update_xaxes(
-        rangeslider=dict(visible=False),
-        rangebreaks=[
-            dict(bounds=["sat", "mon"])  # hide weekends
-        ]
+
+    # Ensure proper axis scaling and range
+    fig.update_yaxes(
+        autorange=True,
+        scaleanchor=None,
+        constrain=None
     )
-    
+
     return fig
 # Update main function with additional debugging:
 def main():
