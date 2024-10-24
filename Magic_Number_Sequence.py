@@ -582,7 +582,11 @@ def main():
         st.write("Data loaded successfully")
         st.write(f"Data shape: {df.shape}")
         st.write(f"Date range: {df.index[0]} to {df.index[-1]}")
-        st.write(f"Price range: ${df['Low'].min():.2f} to ${df['High'].max():.2f}")
+        
+        # Fix price formatting by converting Series to float first
+        low_price = float(df['Low'].min())
+        high_price = float(df['High'].max())
+        st.write(f"Price range: ${low_price:.2f} to ${high_price:.2f}")
         
         fig = create_td_sequential_chart(df, display_start, end_date)
         if fig is not None:
@@ -596,6 +600,10 @@ def main():
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
         import traceback
+        st.write("Full error:", traceback.format_exc())
+
+if __name__ == "__main__":
+    main()
         st.write("Full error:", traceback.format_exc())
 if __name__ == "__main__":
     main()
