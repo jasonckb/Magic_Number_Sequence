@@ -40,67 +40,91 @@ def download_data():
     
     return df, display_start, end_date
 
+def safe_compare(a, b, operator='<='):
+    """Safely compare two values that might be Series"""
+    try:
+        a_val = float(a)
+        b_val = float(b)
+        if operator == '<=':
+            return bool(a_val <= b_val)
+        elif operator == '>=':
+            return bool(a_val >= b_val)
+        elif operator == '<':
+            return bool(a_val < b_val)
+        elif operator == '>':
+            return bool(a_val > b_val)
+        elif operator == '==':
+            return bool(a_val == b_val)
+    except:
+        return False
+
+def safe_minmax(values, operation='min'):
+    """Safely compute min or max of values that might be Series"""
+    try:
+        float_values = [float(v) for v in values]
+        if operation == 'min':
+            return min(float_values)
+        else:  # max
+            return max(float_values)
+    except:
+        return float('-inf') if operation == 'min' else float('inf')
+
+# Update the check functions:
 def check_buy_flip(df, i):
     if i < 5:
         return False
-    current_condition = df['Close'].iloc[i] < df['Close'].iloc[i-4]
-    prev_condition = df['Close'].iloc[i-1] > df['Close'].iloc[i-5]
-    return bool(current_condition and prev_condition)  # Convert to boolean
+    return safe_compare(df['Close'].iloc[i], df['Close'].iloc[i-4], '<') and \
+           safe_compare(df['Close'].iloc[i-1], df['Close'].iloc[i-5], '>')
 
 def check_sell_flip(df, i):
     if i < 5:
         return False
-    current_condition = df['Close'].iloc[i] > df['Close'].iloc[i-4]
-    prev_condition = df['Close'].iloc[i-1] < df['Close'].iloc[i-5]
-    return bool(current_condition and prev_condition)  # Convert to boolean
+    return safe_compare(df['Close'].iloc[i], df['Close'].iloc[i-4], '>') and \
+           safe_compare(df['Close'].iloc[i-1], df['Close'].iloc[i-5], '<')
 
 def check_buy_setup(df, i):
     if i < 4:
         return False
-    return bool(df['Close'].iloc[i] < df['Close'].iloc[i-4])  # Convert to boolean
+    return safe_compare(df['Close'].iloc[i], df['Close'].iloc[i-4], '<')
 
 def check_sell_setup(df, i):
     if i < 4:
         return False
-    return bool(df['Close'].iloc[i] > df['Close'].iloc[i-4])  # Convert to boolean
+    return safe_compare(df['Close'].iloc[i], df['Close'].iloc[i-4], '>')
 
 def check_buy_countdown(df, i):
     if i < 2:
         return False
-    return bool(df['Close'].iloc[i] <= df['Low'].iloc[i-2])  # Convert to boolean
+    return safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<=')
 
 def check_sell_countdown(df, i):
     if i < 2:
         return False
-    return bool(df['Close'].iloc[i] >= df['High'].iloc[i-2])  # Convert to boolea
+    return safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>=')
 
 def check_buy_perfection(df, setup_start, i):
     if i - setup_start < 8:
         return False
-    # Convert Series values to floats before comparison
-    bar8_9_low = min(float(df['Low'].iloc[i]), float(df['Low'].iloc[i-1]))
-    bar6_7_low = min(float(df['Low'].iloc[i-3]), float(df['Low'].iloc[i-2]))
-    return bool(bar8_9_low <= bar6_7_low)
+    bar8_9_low = safe_minmax([df['Low'].iloc[i], df['Low'].iloc[i-1]], 'min')
+    bar6_7_low = safe_minmax([df['Low'].iloc[i-3], df['Low'].iloc[i-2]], 'min')
+    return safe_compare(bar8_9_low, bar6_7_low, '<=')
 
 def check_sell_perfection(df, setup_start, i):
     if i - setup_start < 8:
         return False
-    # Convert Series values to floats before comparison
-    bar8_9_high = max(float(df['High'].iloc[i]), float(df['High'].iloc[i-1]))
-    bar6_7_high = max(float(df['High'].iloc[i-3]), float(df['High'].iloc[i-2]))
-    return bool(bar8_9_high >= bar6_7_high)
+    bar8_9_high = safe_minmax([df['High'].iloc[i], df['High'].iloc[i-1]], 'max')
+    bar6_7_high = safe_minmax([df['High'].iloc[i-3], df['High'].iloc[i-2]], 'max')
+    return safe_compare(bar8_9_high, bar6_7_high, '>=')
 
 def get_tdst_level(df, setup_start_idx, end_idx, is_buy_setup):
     if is_buy_setup:
         prior_close = float(df['Close'].iloc[setup_start_idx-1]) if setup_start_idx > 0 else float('-inf')
-        highest_high = float(df['High'].iloc[setup_start_idx:end_idx+1].max())
-        return float(max(prior_close, highest_high))
+        highest_high = safe_minmax(df['High'].iloc[setup_start_idx:end_idx+1], 'max')
+        return safe_minmax([prior_close, highest_high], 'max')
     else:
         prior_close = float(df['Close'].iloc[setup_start_idx-1]) if setup_start_idx > 0 else float('inf')
-        lowest_low = float(df['Low'].iloc[setup_start_idx:end_idx+1].min())
-        return float(min(prior_close, lowest_low))
-
-
+        lowest_low = safe_minmax(df['Low'].iloc[setup_start_idx:end_idx+1], 'min')
+        return safe_minmax([prior_close, lowest_low], 'min')
 def clean_incomplete_setups(buy_setup, sell_setup):
     cleaned_buy = np.zeros_like(buy_setup)
     cleaned_sell = np.zeros_like(sell_setup)
@@ -157,7 +181,40 @@ class TDSTLevels:
     
     def check_support_violation(self, price):
         if self.active_support is not None:
-            return float(price) < self.active_support  # Convert to float
+            return float(price) < self.active_support  # Convert to float        
+        return False
+
+class TDSTLevels:
+    def __init__(self):
+        self.resistance_levels = []
+        self.support_levels = []
+        self.active_resistance = None
+        self.active_support = None
+    
+    def add_resistance(self, price, date):
+        try:
+            float_price = float(price)
+            self.resistance_levels.append((float_price, date))
+            self.active_resistance = float_price
+        except:
+            pass
+    
+    def add_support(self, price, date):
+        try:
+            float_price = float(price)
+            self.support_levels.append((float_price, date))
+            self.active_support = float_price
+        except:
+            pass
+    
+    def check_resistance_violation(self, price):
+        if self.active_resistance is not None:
+            return safe_compare(price, self.active_resistance, '>')
+        return False
+    
+    def check_support_violation(self, price):
+        if self.active_support is not None:
+            return safe_compare(price, self.active_support, '<')
         return False
 
 def calculate_td_sequential(df):
@@ -194,16 +251,18 @@ def calculate_td_sequential(df):
     bar8_close_sell = None
     
     for i in range(len(df)):
-        if buy_countdown_active and tdst.check_resistance_violation(float(df['Close'].iloc[i])):
+        # Check TDST violations
+        if buy_countdown_active and tdst.check_resistance_violation(df['Close'].iloc[i]):
             buy_countdown_active = False
             buy_setup_count = 0
             buy_countdown_bars = []
             
-        if sell_countdown_active and tdst.check_support_violation(float(df['Close'].iloc[i])):
+        if sell_countdown_active and tdst.check_support_violation(df['Close'].iloc[i]):
             sell_countdown_active = False
             sell_setup_count = 0
             sell_countdown_bars = []
         
+        # Setup flips
         if check_buy_flip(df, i):
             buy_setup_active = True
             sell_setup_active = False
@@ -215,6 +274,7 @@ def calculate_td_sequential(df):
             setup_start_idx = i
             sell_setup[i] = 1
         
+        # Buy setup phase
         if buy_setup_active:
             if check_buy_setup(df, i):
                 if i > 0 and buy_setup[i-1] > 0:
@@ -234,6 +294,7 @@ def calculate_td_sequential(df):
             else:
                 buy_setup_active = False
         
+        # Sell setup phase
         if sell_setup_active:
             if check_sell_setup(df, i):
                 if i > 0 and sell_setup[i-1] > 0:
@@ -253,8 +314,9 @@ def calculate_td_sequential(df):
             else:
                 sell_setup_active = False
         
+        # Buy countdown phase
         if buy_setup_complete and not buy_countdown_active and not need_new_buy_setup:
-            if bool(df['Close'].iloc[i] <= df['Low'].iloc[i-2]):  # Convert to boolean
+            if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
                 buy_countdown_active = True
                 buy_setup_complete = False
                 buy_countdown[i] = 1
@@ -264,19 +326,19 @@ def calculate_td_sequential(df):
                 
         elif buy_countdown_active:
             if waiting_for_buy_13:
-                if bool(df['Low'].iloc[i] <= bar8_close_buy):  # Convert to boolean
+                if safe_compare(df['Low'].iloc[i], bar8_close_buy, '<='):
                     buy_countdown[i] = 13
                     buy_countdown_active = False
                     waiting_for_buy_13 = False
                     buy_countdown_bars = []
                     need_new_buy_setup = True
-                elif bool(df['Close'].iloc[i] <= df['Low'].iloc[i-2]):  # Convert to boolean
+                elif safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
                     buy_countdown[i] = 12
                     buy_deferred[i] = True
                 else:
                     buy_countdown[i] = 12
             else:
-                if bool(df['Close'].iloc[i] <= df['Low'].iloc[i-2]):  # Convert to boolean
+                if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
                     buy_countdown_bars.append(i)
                     
                     if buy_setup_count < 12:
@@ -285,11 +347,12 @@ def calculate_td_sequential(df):
                         if buy_setup_count == 12:
                             if len(buy_countdown_bars) >= 8:
                                 bar8_idx = buy_countdown_bars[-8]
-                                bar8_close_buy = float(df['Close'].iloc[bar8_idx])  # Convert to float
+                                bar8_close_buy = float(df['Close'].iloc[bar8_idx])
                                 waiting_for_buy_13 = True
         
+        # Sell countdown phase
         if sell_setup_complete and not sell_countdown_active and not need_new_sell_setup:
-            if bool(df['Close'].iloc[i] >= df['High'].iloc[i-2]):
+            if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
                 sell_countdown_active = True
                 sell_setup_complete = False
                 sell_countdown[i] = 1
@@ -299,19 +362,19 @@ def calculate_td_sequential(df):
                 
         elif sell_countdown_active:
             if waiting_for_sell_13:
-                if bool(df['High'].iloc[i] >= float(bar8_close_sell)):
+                if safe_compare(df['High'].iloc[i], bar8_close_sell, '>='):
                     sell_countdown[i] = 13
                     sell_countdown_active = False
                     waiting_for_sell_13 = False
                     sell_countdown_bars = []
                     need_new_sell_setup = True
-                elif bool(df['Close'].iloc[i] >= df['High'].iloc[i-2]):
+                elif safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
                     sell_countdown[i] = 12
                     sell_deferred[i] = True
                 else:
                     sell_countdown[i] = 12
             else:
-                if bool(df['Close'].iloc[i] >= df['High'].iloc[i-2]):
+                if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
                     sell_countdown_bars.append(i)
                     
                     if sell_setup_count < 12:
