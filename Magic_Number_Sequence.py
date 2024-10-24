@@ -604,6 +604,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-        st.write("Full error:", traceback.format_exc())
-if __name__ == "__main__":
-    main()
+
