@@ -571,16 +571,20 @@ def create_td_sequential_chart(df, start_date, end_date):
         xaxis_title='Date',
         showlegend=True,
         height=800,
+        paper_bgcolor='white',  # Add white background
+        plot_bgcolor='white',   # Add white background for plot area
         yaxis=dict(
             range=[y_min, y_max],
             autorange=False,
-            fixedrange=False
+            fixedrange=False,
+            gridcolor='lightgrey'  # Add grid color
         ),
         xaxis=dict(
             rangeslider=dict(visible=False),
             type='category',
             tickangle=45,
-            tickformat="%Y-%m-%d"
+            tickformat="%Y-%m-%d",
+            gridcolor='lightgrey'  # Add grid color
         )
     )
     
@@ -594,8 +598,17 @@ def main():
             st.error("No data available for the selected stock")
             return
             
+        st.write("Data loaded successfully")  # Debug message
+        st.write(f"Data shape: {df.shape}")   # Show data dimensions
+        
         fig = create_td_sequential_chart(df, display_start, end_date)
         if fig is not None:
+            st.write("Chart created successfully")  # Debug message
             st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.error("Failed to create chart - returned None")
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
+        st.write("Full error:", e)  # Show full error details
+if __name__ == "__main__":
+    main()
