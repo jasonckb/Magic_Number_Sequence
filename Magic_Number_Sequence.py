@@ -363,10 +363,7 @@ def create_td_sequential_chart(df, start_date, end_date):
         st.error("No data available for the selected date range")
         return None
         
-    buy_setup, sell_setup, buy_countdown, sell_countdown, buy_perfection, sell_perfection, buy_deferred, sell_deferred, tdst = calculate_td_sequential(df)
-    buy_setup, sell_setup = clean_incomplete_setups(buy_setup, sell_setup)
-    
-    # Filter data
+    # Filter data first
     mask = (df.index >= start_date) & (df.index <= end_date)
     df_filtered = df[mask].copy()
     
@@ -374,176 +371,38 @@ def create_td_sequential_chart(df, start_date, end_date):
         st.error("No data available for the selected date range")
         return None
 
-    # Create base figure
-    fig = go.Figure()
+    # Debug prints
+    st.write("Filtered data shape:", df_filtered.shape)
+    st.write("First date:", df_filtered.index[0])
+    st.write("Last date:", df_filtered.index[-1])
+    st.write("Price range:", df_filtered['Low'].min(), "to", df_filtered['High'].max())
 
-    # Add candlestick trace
-    fig.add_trace(
+    # Create base figure with just candlesticks first
+    fig = go.Figure(data=[
         go.Candlestick(
             x=df_filtered.index,
             open=df_filtered['Open'],
             high=df_filtered['High'],
             low=df_filtered['Low'],
             close=df_filtered['Close'],
-            name=ticker
+            name=ticker,
+            increasing_line_color='#26A69A',
+            decreasing_line_color='#EF5350'
         )
-    )
+    ])
 
-    # Calculate price range
-    price_range = df_filtered['High'].max() - df_filtered['Low'].min()
-    y_min = float(df_filtered['Low'].min() - (price_range * 0.1))
-    y_max = float(df_filtered['High'].max() + (price_range * 0.1))
-
-    # Add TrendLine levels
-    for i, (level, date) in enumerate(tdst.resistance_levels):
-        if date in df_filtered.index:
-            date_idx = df_filtered.index.get_loc(date)
-            end_idx = min(date_idx + 30, len(df_filtered.index) - 1)
-            end_date = df_filtered.index[end_idx]
-            
-            fig.add_shape(
-                type="line",
-                x0=date,
-                x1=end_date,
-                y0=float(level),
-                y1=float(level),
-                line=dict(color="red", width=1, dash="dash")
-            )
-            
-            fig.add_annotation(
-                x=end_date,
-                y=float(level),
-                text=f"TrendLine R{len(tdst.resistance_levels)-i}",
-                showarrow=False,
-                xanchor="left",
-                xshift=10,
-                font=dict(color="red", size=10)
-            )
-
-    for i, (level, date) in enumerate(tdst.support_levels):
-        if date in df_filtered.index:
-            date_idx = df_filtered.index.get_loc(date)
-            end_idx = min(date_idx + 30, len(df_filtered.index) - 1)
-            end_date = df_filtered.index[end_idx]
-            
-            fig.add_shape(
-                type="line",
-                x0=date,
-                x1=end_date,
-                y0=float(level),
-                y1=float(level),
-                line=dict(color="green", width=1, dash="dash")
-            )
-            
-            fig.add_annotation(
-                x=end_date,
-                y=float(level),
-                text=f"TrendLine S{len(tdst.support_levels)-i}",
-                showarrow=False,
-                xanchor="left",
-                xshift=10,
-                font=dict(color="green", size=10)
-            )
-
-    # Add counts and perfection annotations
-    for i, idx in enumerate(df_filtered.index):
-        orig_idx = df.index.get_loc(idx)
-        
-        # Buy setup counts
-        if buy_setup[orig_idx] > 0:
-            count_text = str(int(buy_setup[orig_idx]))
-            font_size = 13 if buy_setup[orig_idx] == 9 else 10
-            if buy_setup[orig_idx] == 9:
-                if buy_perfection[orig_idx]:
-                    count_text += "↑"
-                else:
-                    count_text += "+"
-            fig.add_annotation(
-                x=idx,
-                y=float(df_filtered['Low'].iloc[i]),
-                text=count_text,
-                showarrow=False,
-                yshift=-10,
-                font=dict(color="green", size=font_size)
-            )
-        
-        # Buy countdown counts
-        if buy_countdown[orig_idx] > 0 or buy_deferred[orig_idx]:
-            if buy_deferred[orig_idx]:
-                count_text = "+"
-            else:
-                count_text = str(int(buy_countdown[orig_idx]))
-            font_size = 13 if buy_countdown[orig_idx] == 13 else 10
-            fig.add_annotation(
-                x=idx,
-                y=float(df_filtered['Low'].iloc[i]),
-                text=count_text,
-                showarrow=False,
-                yshift=-25,
-                font=dict(color="red", size=font_size)
-            )
-        
-        # Sell setup counts
-        if sell_setup[orig_idx] > 0:
-            count_text = str(int(sell_setup[orig_idx]))
-            font_size = 13 if sell_setup[orig_idx] == 9 else 10
-            if sell_setup[orig_idx] == 9:
-                if sell_perfection[orig_idx]:
-                    count_text += "↓"
-                else:
-                    count_text += "+"
-            fig.add_annotation(
-                x=idx,
-                y=float(df_filtered['High'].iloc[i]),
-                text=count_text,
-                showarrow=False,
-                yshift=10,
-                font=dict(color="green", size=font_size)
-            )
-        
-        # Sell countdown counts
-        if sell_countdown[orig_idx] > 0 or sell_deferred[orig_idx]:
-            if sell_deferred[orig_idx]:
-                count_text = "+"
-            else:
-                count_text = str(int(sell_countdown[orig_idx]))
-            font_size = 13 if sell_countdown[orig_idx] == 13 else 10
-            fig.add_annotation(
-                x=idx,
-                y=float(df_filtered['High'].iloc[i]),
-                text=count_text,
-                showarrow=False,
-                yshift=25,
-                font=dict(color="red", size=font_size)
-            )
-
-    # Single layout update
+    # Basic layout
     fig.update_layout(
         title=f'Magic Number Sequence Analysis - {ticker}',
         yaxis_title='Price',
         xaxis_title='Date',
-        showlegend=True,
         height=800,
         paper_bgcolor='white',
-        plot_bgcolor='white',
-        yaxis=dict(
-            range=[y_min, y_max],
-            side='right',
-            gridcolor='lightgrey',
-            showgrid=True,
-            zeroline=False
-        ),
-        xaxis=dict(
-            rangeslider=dict(visible=False),
-            type='date',  # Changed to date type
-            gridcolor='lightgrey',
-            showgrid=True,
-            zeroline=False
-        ),
-        margin=dict(l=50, r=50, t=50, b=50)
+        plot_bgcolor='white'
     )
 
     return fig
+
 def main():
     try:
         st.write("Starting data download...")
@@ -556,20 +415,23 @@ def main():
         st.write("Data loaded successfully")
         st.write(f"Data shape: {df.shape}")
         
-        # Create chart
+        # Show sample of the data to verify
+        st.write("Sample data:")
+        st.write(df.head())
+        
+        # Create basic chart first
         fig = create_td_sequential_chart(df, display_start, end_date)
+        
         if fig is not None:
             st.write("Chart created successfully")
-            st.plotly_chart(
-                fig, 
-                use_container_width=True, 
-                config={
-                    'scrollZoom': True,
-                    'modeBarButtonsToAdd': ['drawline', 'drawopenpath', 'eraseshape']
-                }
-            )
+            # Try rendering with minimal configuration
+            st.plotly_chart(fig, use_container_width=True)
         else:
             st.error("Failed to create chart - returned None")
+            
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
         st.write("Full error:", traceback.format_exc())
+
+if __name__ == "__main__":
+    main()
