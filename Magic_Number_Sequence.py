@@ -77,26 +77,29 @@ def check_sell_countdown(df, i):
 def check_buy_perfection(df, setup_start, i):
     if i - setup_start < 8:
         return False
+    # Convert Series values to floats before comparison
     bar8_9_low = min(float(df['Low'].iloc[i]), float(df['Low'].iloc[i-1]))
     bar6_7_low = min(float(df['Low'].iloc[i-3]), float(df['Low'].iloc[i-2]))
-    return bool(bar8_9_low <= bar6_7_low)  # Add bool()
+    return bool(bar8_9_low <= bar6_7_low)
 
 def check_sell_perfection(df, setup_start, i):
     if i - setup_start < 8:
         return False
+    # Convert Series values to floats before comparison
     bar8_9_high = max(float(df['High'].iloc[i]), float(df['High'].iloc[i-1]))
     bar6_7_high = max(float(df['High'].iloc[i-3]), float(df['High'].iloc[i-2]))
-    return bool(bar8_9_high >= bar6_7_high)  # Add bool()
+    return bool(bar8_9_high >= bar6_7_high)
 
 def get_tdst_level(df, setup_start_idx, end_idx, is_buy_setup):
     if is_buy_setup:
         prior_close = float(df['Close'].iloc[setup_start_idx-1]) if setup_start_idx > 0 else float('-inf')
         highest_high = float(df['High'].iloc[setup_start_idx:end_idx+1].max())
-        return max(prior_close, highest_high)  # Already returns float
+        return float(max(prior_close, highest_high))
     else:
         prior_close = float(df['Close'].iloc[setup_start_idx-1]) if setup_start_idx > 0 else float('inf')
         lowest_low = float(df['Low'].iloc[setup_start_idx:end_idx+1].min())
-        return min(prior_close, lowest_low)  # Already returns float
+        return float(min(prior_close, lowest_low))
+
 
 def clean_incomplete_setups(buy_setup, sell_setup):
     cleaned_buy = np.zeros_like(buy_setup)
@@ -286,7 +289,7 @@ def calculate_td_sequential(df):
                                 waiting_for_buy_13 = True
         
         if sell_setup_complete and not sell_countdown_active and not need_new_sell_setup:
-            if bool(df['Close'].iloc[i] >= df['High'].iloc[i-2]):  # Add bool()
+            if bool(df['Close'].iloc[i] >= df['High'].iloc[i-2]):
                 sell_countdown_active = True
                 sell_setup_complete = False
                 sell_countdown[i] = 1
@@ -296,19 +299,19 @@ def calculate_td_sequential(df):
                 
         elif sell_countdown_active:
             if waiting_for_sell_13:
-                if bool(df['High'].iloc[i] >= bar8_close_sell):  # Add bool()
+                if bool(df['High'].iloc[i] >= float(bar8_close_sell)):
                     sell_countdown[i] = 13
                     sell_countdown_active = False
                     waiting_for_sell_13 = False
                     sell_countdown_bars = []
                     need_new_sell_setup = True
-                elif bool(df['Close'].iloc[i] >= df['High'].iloc[i-2]):  # Add bool()
+                elif bool(df['Close'].iloc[i] >= df['High'].iloc[i-2]):
                     sell_countdown[i] = 12
                     sell_deferred[i] = True
                 else:
                     sell_countdown[i] = 12
             else:
-                if bool(df['Close'].iloc[i] >= df['High'].iloc[i-2]):  # Add bool()
+                if bool(df['Close'].iloc[i] >= df['High'].iloc[i-2]):
                     sell_countdown_bars.append(i)
                     
                     if sell_setup_count < 12:
@@ -317,7 +320,7 @@ def calculate_td_sequential(df):
                         if sell_setup_count == 12:
                             if len(sell_countdown_bars) >= 8:
                                 bar8_idx = sell_countdown_bars[-8]
-                                bar8_close_sell = float(df['Close'].iloc[bar8_idx])  # Add float()
+                                bar8_close_sell = float(df['Close'].iloc[bar8_idx])
                                 waiting_for_sell_13 = True
     
     return buy_setup, sell_setup, buy_countdown, sell_countdown, buy_perfection, sell_perfection, buy_deferred, sell_deferred, tdst
