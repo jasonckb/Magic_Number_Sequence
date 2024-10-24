@@ -40,15 +40,295 @@ def download_data():
     
     return df, display_start, end_date
 
-# [All helper functions remain exactly the same until create_td_sequential_chart]
+def check_buy_flip(df, i):
+    if i < 5:
+        return False
+    current_condition = df['Close'].iloc[i] < df['Close'].iloc[i-4]
+    prev_condition = df['Close'].iloc[i-1] > df['Close'].iloc[i-5]
+    return current_condition and prev_condition
+
+def check_sell_flip(df, i):
+    if i < 5:
+        return False
+    current_condition = df['Close'].iloc[i] > df['Close'].iloc[i-4]
+    prev_condition = df['Close'].iloc[i-1] < df['Close'].iloc[i-5]
+    return current_condition and prev_condition
+
+def check_buy_setup(df, i):
+    if i < 4:
+        return False
+    return df['Close'].iloc[i] < df['Close'].iloc[i-4]
+
+def check_sell_setup(df, i):
+    if i < 4:
+        return False
+    return df['Close'].iloc[i] > df['Close'].iloc[i-4]
+
+def check_buy_countdown(df, i):
+    if i < 2:
+        return False
+    return df['Close'].iloc[i] <= df['Low'].iloc[i-2]
+
+def check_sell_countdown(df, i):
+    if i < 2:
+        return False
+    return df['Close'].iloc[i] >= df['High'].iloc[i-2]
+
+def check_buy_perfection(df, setup_start, i):
+    if i - setup_start < 8:
+        return False
+    bar8_9_low = min(df['Low'].iloc[i], df['Low'].iloc[i-1])
+    bar6_7_low = min(df['Low'].iloc[i-3], df['Low'].iloc[i-2])
+    return bar8_9_low <= bar6_7_low
+
+def check_sell_perfection(df, setup_start, i):
+    if i - setup_start < 8:
+        return False
+    bar8_9_high = max(df['High'].iloc[i], df['High'].iloc[i-1])
+    bar6_7_high = max(df['High'].iloc[i-3], df['High'].iloc[i-2])
+    return bar8_9_high >= bar6_7_high
+
+def get_tdst_level(df, setup_start_idx, end_idx, is_buy_setup):
+    if is_buy_setup:
+        prior_close = df['Close'].iloc[setup_start_idx-1] if setup_start_idx > 0 else float('-inf')
+        highest_high = df['High'].iloc[setup_start_idx:end_idx+1].max()
+        return max(prior_close, highest_high)  # Take the higher value
+    else:
+        prior_close = df['Close'].iloc[setup_start_idx-1] if setup_start_idx > 0 else float('inf')
+        lowest_low = df['Low'].iloc[setup_start_idx:end_idx+1].min()
+        return min(prior_close, lowest_low)  # Take the lower value
+
+def clean_incomplete_setups(buy_setup, sell_setup):
+    cleaned_buy = np.zeros_like(buy_setup)
+    cleaned_sell = np.zeros_like(sell_setup)
+    
+    # Process buy setups
+    i = 0
+    while i < len(buy_setup):
+        if buy_setup[i] > 0:
+            start = i
+            while i < len(buy_setup) and buy_setup[i] > 0:
+                i += 1
+            end = i
+            
+            if buy_setup[end-1] == 9:
+                cleaned_buy[start:end] = buy_setup[start:end]
+        else:
+            i += 1
+    
+    # Process sell setups
+    i = 0
+    while i < len(sell_setup):
+        if sell_setup[i] > 0:
+            start = i
+            while i < len(sell_setup) and sell_setup[i] > 0:
+                i += 1
+            end = i
+            
+            if sell_setup[end-1] == 9:
+                cleaned_sell[start:end] = sell_setup[start:end]
+        else:
+            i += 1
+    
+    return cleaned_buy, cleaned_sell
+
+class TDSTLevels:
+    def __init__(self):
+        # Store all levels with their start dates for drawing
+        self.resistance_levels = []
+        self.support_levels = []
+        # Keep only most recent level for comparison
+        self.active_resistance = None
+        self.active_support = None
+    
+    def add_resistance(self, price, date):
+        self.resistance_levels.append((price, date))
+        self.active_resistance = price
+    
+    def add_support(self, price, date):
+        self.support_levels.append((price, date))
+        self.active_support = price
+    
+    def check_resistance_violation(self, price):
+        if self.active_resistance is not None:
+            return price > self.active_resistance
+        return False
+    
+    def check_support_violation(self, price):
+        if self.active_support is not None:
+            return price < self.active_support
+        return False
+
+def calculate_td_sequential(df):
+    buy_setup = np.zeros(len(df))
+    sell_setup = np.zeros(len(df))
+    buy_countdown = np.zeros(len(df))
+    sell_countdown = np.zeros(len(df))
+    buy_perfection = np.zeros(len(df))
+    sell_perfection = np.zeros(len(df))
+    buy_deferred = np.zeros(len(df), dtype=bool)
+    sell_deferred = np.zeros(len(df), dtype=bool)
+    buy_setup_active = False
+    sell_setup_active = False
+    buy_countdown_active = False
+    sell_countdown_active = False
+    buy_setup_complete = False
+    sell_setup_complete = False
+    setup_start_idx = 0
+    
+    buy_countdown_bars = []
+    sell_countdown_bars = []
+    
+    tdst = TDSTLevels()
+    
+    need_new_buy_setup = False
+    need_new_sell_setup = False
+    
+    buy_setup_count = 0
+    sell_setup_count = 0
+    
+    waiting_for_buy_13 = False
+    waiting_for_sell_13 = False
+    bar8_close_buy = None
+    bar8_close_sell = None
+    
+    for i in range(len(df)):
+        if buy_countdown_active and tdst.check_resistance_violation(df['Close'].iloc[i]):
+            buy_countdown_active = False
+            buy_setup_count = 0
+            buy_countdown_bars = []
+            
+        if sell_countdown_active and tdst.check_support_violation(df['Close'].iloc[i]):
+            sell_countdown_active = False
+            sell_setup_count = 0
+            sell_countdown_bars = []
+        
+        if check_buy_flip(df, i):
+            buy_setup_active = True
+            sell_setup_active = False
+            setup_start_idx = i
+            buy_setup[i] = 1
+        elif check_sell_flip(df, i):
+            sell_setup_active = True
+            buy_setup_active = False
+            setup_start_idx = i
+            sell_setup[i] = 1
+        
+        if buy_setup_active:
+            if check_buy_setup(df, i):
+                if i > 0 and buy_setup[i-1] > 0:
+                    current_count = buy_setup[i-1] + 1
+                    if current_count <= 9:
+                        buy_setup[i] = current_count
+                        if current_count == 9:
+                            if check_buy_perfection(df, setup_start_idx, i):
+                                buy_perfection[i] = 1
+                            buy_setup_active = False
+                            buy_setup_complete = True
+                            need_new_buy_setup = False
+                            resistance = get_tdst_level(df, setup_start_idx, i, True)
+                            tdst.add_resistance(resistance, df.index[i])
+                else:
+                    buy_setup[i] = 1
+            else:
+                buy_setup_active = False
+        
+        if sell_setup_active:
+            if check_sell_setup(df, i):
+                if i > 0 and sell_setup[i-1] > 0:
+                    current_count = sell_setup[i-1] + 1
+                    if current_count <= 9:
+                        sell_setup[i] = current_count
+                        if current_count == 9:
+                            if check_sell_perfection(df, setup_start_idx, i):
+                                sell_perfection[i] = 1
+                            sell_setup_active = False
+                            sell_setup_complete = True
+                            need_new_sell_setup = False
+                            support = get_tdst_level(df, setup_start_idx, i, False)
+                            tdst.add_support(support, df.index[i])
+                else:
+                    sell_setup[i] = 1
+            else:
+                sell_setup_active = False
+        
+        if buy_setup_complete and not buy_countdown_active and not need_new_buy_setup:
+            if df['Close'].iloc[i] <= df['Low'].iloc[i-2]:
+                buy_countdown_active = True
+                buy_setup_complete = False
+                buy_countdown[i] = 1
+                buy_setup_count = 1
+                buy_countdown_bars = [i]
+                waiting_for_buy_13 = False
+                
+        elif buy_countdown_active:
+            if waiting_for_buy_13:
+                if df['Low'].iloc[i] <= bar8_close_buy:
+                    buy_countdown[i] = 13
+                    buy_countdown_active = False
+                    waiting_for_buy_13 = False
+                    buy_countdown_bars = []
+                    need_new_buy_setup = True
+                elif df['Close'].iloc[i] <= df['Low'].iloc[i-2]:
+                    buy_countdown[i] = 12
+                    buy_deferred[i] = True
+                else:
+                    buy_countdown[i] = 12
+            else:
+                if df['Close'].iloc[i] <= df['Low'].iloc[i-2]:
+                    buy_countdown_bars.append(i)
+                    
+                    if buy_setup_count < 12:
+                        buy_setup_count += 1
+                        buy_countdown[i] = buy_setup_count
+                        if buy_setup_count == 12:
+                            if len(buy_countdown_bars) >= 8:
+                                bar8_idx = buy_countdown_bars[-8]
+                                bar8_close_buy = df['Close'].iloc[bar8_idx]
+                                waiting_for_buy_13 = True
+        
+        if sell_setup_complete and not sell_countdown_active and not need_new_sell_setup:
+            if df['Close'].iloc[i] >= df['High'].iloc[i-2]:
+                sell_countdown_active = True
+                sell_setup_complete = False
+                sell_countdown[i] = 1
+                sell_setup_count = 1
+                sell_countdown_bars = [i]
+                waiting_for_sell_13 = False
+                
+        elif sell_countdown_active:
+            if waiting_for_sell_13:
+                if df['High'].iloc[i] >= bar8_close_sell:
+                    sell_countdown[i] = 13
+                    sell_countdown_active = False
+                    waiting_for_sell_13 = False
+                    sell_countdown_bars = []
+                    need_new_sell_setup = True
+                elif df['Close'].iloc[i] >= df['High'].iloc[i-2]:
+                    sell_countdown[i] = 12
+                    sell_deferred[i] = True
+                else:
+                    sell_countdown[i] = 12
+            else:
+                if df['Close'].iloc[i] >= df['High'].iloc[i-2]:
+                    sell_countdown_bars.append(i)
+                    
+                    if sell_setup_count < 12:
+                        sell_setup_count += 1
+                        sell_countdown[i] = sell_setup_count
+                        if sell_setup_count == 12:
+                            if len(sell_countdown_bars) >= 8:
+                                bar8_idx = sell_countdown_bars[-8]
+                                bar8_close_sell = df['Close'].iloc[bar8_idx]
+                                waiting_for_sell_13 = True
+    
+    return buy_setup, sell_setup, buy_countdown, sell_countdown, buy_perfection, sell_perfection, buy_deferred, sell_deferred, tdst
 
 def create_td_sequential_chart(df, start_date, end_date):
     buy_setup, sell_setup, buy_countdown, sell_countdown, buy_perfection, sell_perfection, buy_deferred, sell_deferred, tdst = calculate_td_sequential(df)
     
-    # Clean incomplete setups
     buy_setup, sell_setup = clean_incomplete_setups(buy_setup, sell_setup)
     
-    # Filter data to only include trading days within the date range
     mask = (df.index >= start_date) & (df.index <= end_date)
     df_filtered = df[mask]
     
@@ -58,65 +338,138 @@ def create_td_sequential_chart(df, start_date, end_date):
                                         low=df_filtered['Low'],
                                         close=df_filtered['Close'])])
     
-    # Add Trendline levels (renamed from TDST)
+    # Add TrendLine levels (formerly TDST)
     for i, (level, date) in enumerate(tdst.resistance_levels):
-        fig.add_shape(
-            type="line",
-            x0=date,
-            x1=df_filtered.index[-1],
-            y0=level,
-            y1=level,
-            line=dict(
-                color="red",
-                width=2 if i == len(tdst.resistance_levels)-1 else 1,
-                dash="dash"
+        date_idx = df_filtered.index.get_loc(date) if date in df_filtered.index else -1
+        if date_idx != -1:
+            end_idx = min(date_idx + 30, len(df_filtered) - 1)
+            end_date = df_filtered.index[end_idx]
+            
+            fig.add_shape(
+                type="line",
+                x0=date,
+                x1=end_date,
+                y0=level,
+                y1=level,
+                line=dict(
+                    color="red",
+                    width=1,
+                    dash="dash"
+                )
             )
-        )
     
     for i, (level, date) in enumerate(tdst.support_levels):
-        fig.add_shape(
-            type="line",
-            x0=date,
-            x1=df_filtered.index[-1],
-            y0=level,
-            y1=level,
-            line=dict(
-                color="green",
-                width=2 if i == len(tdst.support_levels)-1 else 1,
-                dash="dash"
+        date_idx = df_filtered.index.get_loc(date) if date in df_filtered.index else -1
+        if date_idx != -1:
+            end_idx = min(date_idx + 30, len(df_filtered) - 1)
+            end_date = df_filtered.index[end_idx]
+            
+            fig.add_shape(
+                type="line",
+                x0=date,
+                x1=end_date,
+                y0=level,
+                y1=level,
+                line=dict(
+                    color="green",
+                    width=1,
+                    dash="dash"
+                )
             )
-        )
     
-    # Add annotations for filtered date range
+    # Add annotations
     for i in range(len(df_filtered)):
         idx = df_filtered.index[i]
         orig_idx = df.index.get_loc(idx)
         
-        # [Setup and countdown annotations remain the same]
-        # [Previous annotation code remains exactly the same]
+        # Buy setup counts
+        if buy_setup[orig_idx] > 0:
+            count_text = str(int(buy_setup[orig_idx]))
+            font_size = 13 if buy_setup[orig_idx] == 9 else 10
+            if buy_setup[orig_idx] == 9:
+                if buy_perfection[orig_idx]:
+                    count_text += "↑"
+                else:
+                    count_text += "+"
+            fig.add_annotation(x=idx, y=df_filtered['Low'].iloc[i],
+                             text=count_text,
+                             showarrow=False,
+                             yshift=-10,
+                             font=dict(color="green", size=font_size))
+        
+        # Buy countdown counts
+        if buy_countdown[orig_idx] > 0 or buy_deferred[orig_idx]:
+            if buy_deferred[orig_idx]:
+                count_text = "+"
+            else:
+                count_text = str(int(buy_countdown[orig_idx]))
+            font_size = 13 if buy_countdown[orig_idx] == 13 else 10
+            fig.add_annotation(x=idx, y=df_filtered['Low'].iloc[i],
+                             text=count_text,
+                             showarrow=False,
+                             yshift=-25,
+                             font=dict(color="red", size=font_size))
+        
+        # Sell setup counts
+        if sell_setup[orig_idx] > 0:
+            count_text = str(int(sell_setup[orig_idx]))
+            font_size = 13 if sell_setup[orig_idx] == 9 else 10
+            if sell_setup[orig_idx] == 9:
+                if sell_perfection[orig_idx]:
+                    count_text += "↓"
+                else:
+                    count_text += "+"
+            fig.add_annotation(x=idx, y=df_filtered['High'].iloc[i],
+                             text=count_text,
+                             showarrow=False,
+                             yshift=10,
+                             font=dict(color="green", size=font_size))
+        
+        # Sell countdown counts
+        if sell_countdown[orig_idx] > 0 or sell_deferred[orig_idx]:
+            if sell_deferred[orig_idx]:
+                count_text = "+"
+            else:
+                count_text = str(int(sell_countdown[orig_idx]))
+            font_size = 13 if sell_countdown[orig_idx] == 13 else 10
+            fig.add_annotation(x=idx, y=df_filtered['High'].iloc[i],
+                             text=count_text,
+                             showarrow=False,
+                             yshift=25,
+                             font=dict(color="red", size=font_size))
     
-    # Add Trendline level labels (renamed from TDST)
+    # Add TrendLine level labels (formerly TDST)
     for i, (level, date) in enumerate(tdst.resistance_levels):
-        fig.add_annotation(
-            x=df_filtered.index[-1],
-            y=level,
-            text=f"TrendLine R{len(tdst.resistance_levels)-i}",
-            showarrow=False,
-            xanchor="left",
-            xshift=10,
-            font=dict(color="red", size=10)
-        )
+        date_idx = df_filtered.index.get_loc(date) if date in df_filtered.index else -1
+        if date_idx != -1:
+            end_idx = min(date_idx + 30, len(df_filtered) - 1)
+            end_date = df_filtered.index[end_idx]
+            
+            fig.add_annotation(
+                x=end_date,
+                y=level,
+                text=f"TrendLine R{len(tdst.resistance_levels)-i}",
+                showarrow=False,
+                xanchor="left",
+                xshift=10,
+                font=dict(color="red", size=10)
+            )
     
     for i, (level, date) in enumerate(tdst.support_levels):
-        fig.add_annotation(
-            x=df_filtered.index[-1],
-            y=level,
-            text=f"TrendLine S{len(tdst.support_levels)-i}",
-            showarrow=False,
-            xanchor="left",
-            xshift=10,
-            font=dict(color="green", size=10)
-        )
+        date_idx = df_filtered.index.get_loc(date) if date in df_filtered.index else -1
+        if date_idx != -1:
+            end_idx = min(date_idx + 30, len(df_filtered) - 1)
+            end_date = df_filtered.index[end_idx]
+            
+            fig.add_annotation(
+                x=end_date,
+                y=level,
+                text=f"TrendLine S{len(tdst.support_levels)-i}",
+                showarrow=False,
+                xanchor="left",
+                xshift=10,
+                font=dict(color="green", size=10)
+            )
     
     # Update layout
     fig.update_layout(
