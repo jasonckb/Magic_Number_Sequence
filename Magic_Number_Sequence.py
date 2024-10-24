@@ -375,10 +375,10 @@ def create_td_sequential_chart(df, start_date, end_date):
         st.error("No data available for the selected date range")
         return None
 
-    # Create figure with secondary y-axis
+    # Create figure first
     fig = go.Figure()
-
-    # Add candlestick
+    
+    # Add candlestick with specific parameters
     fig.add_trace(
         go.Candlestick(
             x=df_filtered.index,
@@ -386,15 +386,69 @@ def create_td_sequential_chart(df, start_date, end_date):
             high=df_filtered['High'],
             low=df_filtered['Low'],
             close=df_filtered['Close'],
-            name='AAPL',
-            yaxis='y',
-            visible=True,
-            showlegend=True,
-            increasing_line_color='#26A69A',
-            decreasing_line_color='#EF5350',
-            increasing_fillcolor='#26A69A',
-            decreasing_fillcolor='#EF5350'
+            name='Price',
+            increasing=dict(line=dict(color='#26A69A'), fillcolor='#26A69A'),
+            decreasing=dict(line=dict(color='#EF5350'), fillcolor='#EF5350'),
+            line=dict(width=1),
+            opacity=1,
+            showlegend=True
         )
+    )
+
+    # Update layout with specific focus on axis settings
+    fig.update_layout(
+        title=f'Magic Number Sequence Analysis - {ticker}',
+        yaxis_title='Price',
+        xaxis_title='Date',
+        showlegend=True,
+        height=800,
+        paper_bgcolor='white',
+        plot_bgcolor='white',
+        yaxis=dict(
+            autorange=True,  # Changed to true for better scaling
+            fixedrange=False,
+            gridcolor='lightgrey',
+            showgrid=True,
+            side='right',
+            title='Price',
+            showticklabels=True,
+            tickformat='.2f'  # Add 2 decimal places for price
+        ),
+        xaxis=dict(
+            rangeslider=dict(visible=False),
+            type='category',
+            gridcolor='lightgrey',
+            showgrid=True,
+            rangeslider_visible=False,
+            showticklabels=True
+        ),
+        margin=dict(l=50, r=50, t=50, b=50),
+        dragmode='zoom',
+        hovermode='x unified'
+    )
+
+    # Update axes specific properties
+    fig.update_xaxes(
+        rangebreaks=[
+            dict(bounds=["sat", "mon"])  # hide weekends
+        ],
+        showspikes=True,
+        spikemode='across',
+        spikesnap='cursor',
+        showline=True,
+        showgrid=True
+    )
+
+    # Update yaxis properties
+    fig.update_yaxes(
+        showspikes=True,
+        spikemode='across',
+        spikesnap='cursor',
+        showline=True,
+        showgrid=True,
+        autorange=True,
+        scaleanchor=None,  # Remove any scaling anchors
+        constrain=None     # Remove constraints
     )
 
     # Calculate y-axis range with more padding
