@@ -521,8 +521,22 @@ def create_td_sequential_chart(df, start_date, end_date):
                 yshift=25,
                 font=dict(color="red", size=font_size)
             )
-    
-    # Update layout
+
+    # Update the candlestick settings
+    fig = go.Figure(data=[go.Candlestick(
+        x=df_filtered.index,
+        open=df_filtered['Open'],
+        high=df_filtered['High'],
+        low=df_filtered['Low'],
+        close=df_filtered['Close'],
+        name='OHLC',
+        increasing_line_color='#26A69A',
+        decreasing_line_color='#EF5350',
+        increasing_fillcolor='#26A69A',
+        decreasing_fillcolor='#EF5350'
+    )])
+
+    # Update the layout settings
     fig.update_layout(
         title=f'Magic Number Sequence Analysis - {ticker}',
         yaxis_title='Price',
@@ -536,19 +550,25 @@ def create_td_sequential_chart(df, start_date, end_date):
             autorange=False,
             fixedrange=False,
             gridcolor='lightgrey',
-            showgrid=True
+            showgrid=True,
+            side='right'  # Move price axis to right side
         ),
         xaxis=dict(
             rangeslider=dict(visible=False),
-            type='date',
+            type='category',  # Change back to category for better display
             gridcolor='lightgrey',
-            showgrid=True
+            showgrid=True,
+            tickangle=0  # Horizontal date labels
         ),
         margin=dict(l=50, r=50, t=50, b=50)
     )
-    
-    return fig
 
+    # Update layout to ensure candlesticks are visible
+    fig.update_xaxes(rangebreaks=[
+        dict(bounds=["sat", "mon"]),  # Hide weekends
+    ])
+
+    return fig
 # Update main function with additional debugging:
 def main():
     try:
@@ -562,17 +582,20 @@ def main():
         st.write("Data loaded successfully")
         st.write(f"Data shape: {df.shape}")
         st.write(f"Date range: {df.index[0]} to {df.index[-1]}")
+        st.write(f"Price range: ${df['Low'].min():.2f} to ${df['High'].max():.2f}")
         
         fig = create_td_sequential_chart(df, display_start, end_date)
         if fig is not None:
             st.write("Chart created successfully")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, config={
+                'modeBarButtonsToAdd': ['drawline', 'drawopenpath', 'eraseshape'],
+                'scrollZoom': True
+            })
         else:
             st.error("Failed to create chart - returned None")
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
         import traceback
         st.write("Full error:", traceback.format_exc())
-
 if __name__ == "__main__":
     main()
