@@ -389,24 +389,42 @@ def calculate_td_sequential(df):
     return buy_setup, sell_setup, buy_countdown, sell_countdown, buy_perfection, sell_perfection, buy_deferred, sell_deferred, tdst
 
 def create_td_sequential_chart(df, start_date, end_date):
+    # Check if we have data
+    if df.empty:
+        st.error("No data available for the selected date range")
+        return None
+        
     buy_setup, sell_setup, buy_countdown, sell_countdown, buy_perfection, sell_perfection, buy_deferred, sell_deferred, tdst = calculate_td_sequential(df)
     
     buy_setup, sell_setup = clean_incomplete_setups(buy_setup, sell_setup)
     
+    # Filter data and check if we have filtered data
     mask = (df.index >= start_date) & (df.index <= end_date)
-    df_filtered = df[mask]
+    df_filtered = df[mask].copy()
     
-    fig = go.Figure(data=[go.Candlestick(x=df_filtered.index,
-                                        open=df_filtered['Open'],
-                                        high=df_filtered['High'],
-                                        low=df_filtered['Low'],
-                                        close=df_filtered['Close'])])
+    if df_filtered.empty:
+        st.error("No data available for the selected date range")
+        return None
+
+    # Create base candlestick chart
+    fig = go.Figure(data=[go.Candlestick(
+        x=df_filtered.index,
+        open=df_filtered['Open'],
+        high=df_filtered['High'],
+        low=df_filtered['Low'],
+        close=df_filtered['Close'],
+        name='OHLC'
+    )])
     
-    # Add TrendLine levels (formerly TDST)
+    # Calculate y-axis range
+    y_min = df_filtered['Low'].min() * 0.99
+    y_max = df_filtered['High'].max() * 1.01
+    
+    # Add TrendLine levels
     for i, (level, date) in enumerate(tdst.resistance_levels):
-        date_idx = df_filtered.index.get_loc(date) if date in df_filtered.index else -1
-        if date_idx != -1:
-            end_idx = min(date_idx + 30, len(df_filtered) - 1)
+        if date in df_filtered.index:
+            date_idx = df_filtered.index.get_loc(date)
+            end_idx = min(date_idx + 30, len(df_filtered.index) - 1)
             end_date = df_filtered.index[end_idx]
             
             fig.add_shape(
@@ -423,9 +441,9 @@ def create_td_sequential_chart(df, start_date, end_date):
             )
     
     for i, (level, date) in enumerate(tdst.support_levels):
-        date_idx = df_filtered.index.get_loc(date) if date in df_filtered.index else -1
-        if date_idx != -1:
-            end_idx = min(date_idx + 30, len(df_filtered) - 1)
+        if date in df_filtered.index:
+            date_idx = df_filtered.index.get_loc(date)
+            end_idx = min(date_idx + 30, len(df_filtered.index) - 1)
             end_date = df_filtered.index[end_idx]
             
             fig.add_shape(
@@ -442,8 +460,7 @@ def create_td_sequential_chart(df, start_date, end_date):
             )
     
     # Add annotations
-    for i in range(len(df_filtered)):
-        idx = df_filtered.index[i]
+    for i, idx in enumerate(df_filtered.index):
         orig_idx = df.index.get_loc(idx)
         
         # Buy setup counts
@@ -455,11 +472,14 @@ def create_td_sequential_chart(df, start_date, end_date):
                     count_text += "↑"
                 else:
                     count_text += "+"
-            fig.add_annotation(x=idx, y=df_filtered['Low'].iloc[i],
-                             text=count_text,
-                             showarrow=False,
-                             yshift=-10,
-                             font=dict(color="green", size=font_size))
+            fig.add_annotation(
+                x=idx,
+                y=float(df_filtered['Low'].iloc[i]),
+                text=count_text,
+                showarrow=False,
+                yshift=-10,
+                font=dict(color="green", size=font_size)
+            )
         
         # Buy countdown counts
         if buy_countdown[orig_idx] > 0 or buy_deferred[orig_idx]:
@@ -468,11 +488,14 @@ def create_td_sequential_chart(df, start_date, end_date):
             else:
                 count_text = str(int(buy_countdown[orig_idx]))
             font_size = 13 if buy_countdown[orig_idx] == 13 else 10
-            fig.add_annotation(x=idx, y=df_filtered['Low'].iloc[i],
-                             text=count_text,
-                             showarrow=False,
-                             yshift=-25,
-                             font=dict(color="red", size=font_size))
+            fig.add_annotation(
+                x=idx,
+                y=float(df_filtered['Low'].iloc[i]),
+                text=count_text,
+                showarrow=False,
+                yshift=-25,
+                font=dict(color="red", size=font_size)
+            )
         
         # Sell setup counts
         if sell_setup[orig_idx] > 0:
@@ -483,11 +506,14 @@ def create_td_sequential_chart(df, start_date, end_date):
                     count_text += "↓"
                 else:
                     count_text += "+"
-            fig.add_annotation(x=idx, y=df_filtered['High'].iloc[i],
-                             text=count_text,
-                             showarrow=False,
-                             yshift=10,
-                             font=dict(color="green", size=font_size))
+            fig.add_annotation(
+                x=idx,
+                y=float(df_filtered['High'].iloc[i]),
+                text=count_text,
+                showarrow=False,
+                yshift=10,
+                font=dict(color="green", size=font_size)
+            )
         
         # Sell countdown counts
         if sell_countdown[orig_idx] > 0 or sell_deferred[orig_idx]:
@@ -496,17 +522,20 @@ def create_td_sequential_chart(df, start_date, end_date):
             else:
                 count_text = str(int(sell_countdown[orig_idx]))
             font_size = 13 if sell_countdown[orig_idx] == 13 else 10
-            fig.add_annotation(x=idx, y=df_filtered['High'].iloc[i],
-                             text=count_text,
-                             showarrow=False,
-                             yshift=25,
-                             font=dict(color="red", size=font_size))
+            fig.add_annotation(
+                x=idx,
+                y=float(df_filtered['High'].iloc[i]),
+                text=count_text,
+                showarrow=False,
+                yshift=25,
+                font=dict(color="red", size=font_size)
+            )
     
-    # Add TrendLine level labels (formerly TDST)
+    # Add TrendLine labels
     for i, (level, date) in enumerate(tdst.resistance_levels):
-        date_idx = df_filtered.index.get_loc(date) if date in df_filtered.index else -1
-        if date_idx != -1:
-            end_idx = min(date_idx + 30, len(df_filtered) - 1)
+        if date in df_filtered.index:
+            date_idx = df_filtered.index.get_loc(date)
+            end_idx = min(date_idx + 30, len(df_filtered.index) - 1)
             end_date = df_filtered.index[end_idx]
             
             fig.add_annotation(
@@ -520,9 +549,9 @@ def create_td_sequential_chart(df, start_date, end_date):
             )
     
     for i, (level, date) in enumerate(tdst.support_levels):
-        date_idx = df_filtered.index.get_loc(date) if date in df_filtered.index else -1
-        if date_idx != -1:
-            end_idx = min(date_idx + 30, len(df_filtered) - 1)
+        if date in df_filtered.index:
+            date_idx = df_filtered.index.get_loc(date)
+            end_idx = min(date_idx + 30, len(df_filtered.index) - 1)
             end_date = df_filtered.index[end_idx]
             
             fig.add_annotation(
@@ -535,18 +564,17 @@ def create_td_sequential_chart(df, start_date, end_date):
                 font=dict(color="green", size=10)
             )
     
-    # Update layout
+    # Update layout with fixed ranges
     fig.update_layout(
         title=f'Magic Number Sequence Analysis - {ticker}',
         yaxis_title='Price',
         xaxis_title='Date',
-        showlegend=False,
+        showlegend=True,
         height=800,
-        width=None,  # Let Streamlit handle the width
         yaxis=dict(
-            autorange=True,
-            fixedrange=False,
-            range=[df_filtered['Low'].min() * 0.99, df_filtered['High'].max() * 1.01]
+            range=[y_min, y_max],
+            autorange=False,
+            fixedrange=False
         ),
         xaxis=dict(
             rangeslider=dict(visible=False),
@@ -558,13 +586,16 @@ def create_td_sequential_chart(df, start_date, end_date):
     
     return fig
 
+# Update main function to handle None return
 def main():
     try:
         df, display_start, end_date = download_data()
+        if df.empty:
+            st.error("No data available for the selected stock")
+            return
+            
         fig = create_td_sequential_chart(df, display_start, end_date)
-        st.plotly_chart(fig, use_container_width=True)
+        if fig is not None:
+            st.plotly_chart(fig, use_container_width=True)
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
-
-if __name__ == "__main__":
-    main()
