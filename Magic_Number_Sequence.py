@@ -36,32 +36,39 @@ def clean_yahoo_data(df):
         if missing_columns:
             st.error(f"Missing required columns: {', '.join(missing_columns)}")
             return pd.DataFrame()
-        
-        # Check for all NaN values
-        if df[required_columns].isna().all().all():
-            st.error("All values are NaN. This usually means no trading data is available for this ticker.")
-            return pd.DataFrame()
-            
-        # Convert the DataFrame to numeric, coerce errors to NaN
+
+        # Make a copy of the DataFrame to avoid modifying the original
         df_cleaned = df.copy()
-        for col in required_columns:
-            df_cleaned[col] = pd.to_numeric(df_cleaned[col], errors='coerce')
         
-        # Drop any rows where all OHLC values are NaN
-        df_cleaned = df_cleaned.dropna(subset=required_columns, how='all')
+        # Convert each OHLC column to numeric individually
+        for col in required_columns:
+            try:
+                df_cleaned[col] = pd.to_numeric(df_cleaned[col], errors='coerce')
+            except Exception as e:
+                st.error(f"Error converting {col} column to numeric: {str(e)}")
+                return pd.DataFrame()
+        
+        # Drop rows where any OHLC value is NaN
+        df_cleaned = df_cleaned.dropna(subset=required_columns)
         
         # Check if we have any data left after cleaning
         if len(df_cleaned) == 0:
             st.error("No valid OHLC data remains after cleaning")
             return pd.DataFrame()
-            
+        
         # Preserve the datetime index
         df_cleaned.index = pd.to_datetime(df.index)
+        
+        # Debug information
+        st.write(f"Original shape: {df.shape}")
+        st.write(f"Cleaned shape: {df_cleaned.shape}")
         
         return df_cleaned
         
     except Exception as e:
         st.error(f"Error in data cleaning: {str(e)}")
+        st.write("DataFrame info:")
+        st.write(df.info())
         return pd.DataFrame()
 
 # Comparison Helper Functions
@@ -520,7 +527,13 @@ def main():
                 st.write("- The ticker symbol might be incorrect")
                 st.write("- The stock might not be listed or actively trading")
                 st.write("- There might be an issue with the data provider")
+                st.write(f"Attempted to download: {formatted_ticker}")
                 return
+                
+            # Debug information
+            st.write("Raw data shape:", data.shape)
+            st.write("Raw data columns:", data.columns.tolist())
+            
             st.success("Data downloaded successfully")
         except Exception as e:
             st.error(f"Error downloading data: {str(e)}")
@@ -547,7 +560,10 @@ def main():
             
             # Show sample data in an expander
             with st.expander("View Sample Data"):
+                st.write("First 5 rows:")
                 st.dataframe(data.head())
+                st.write("Data types:")
+                st.write(data.dtypes)
             
             # Create and display chart
             st.write("Creating chart...")
