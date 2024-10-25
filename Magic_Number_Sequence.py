@@ -124,7 +124,7 @@ class TDSTLevels:
         if self.active_support is not None:
             return safe_compare(price, self.active_support, '<')
         return False10)
-            )
+            
 def calculate_td_sequential(df):
     # Initialize arrays
     buy_setup = np.zeros(len(df))
