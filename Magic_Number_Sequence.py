@@ -19,13 +19,17 @@ start_date = end_date - pd.DateOffset(years=1)
 data = yf.download(ticker_input, start=start_date, end=end_date)
 
 # Title and layout
-st.title("Magic Number Sequence by Jason Chan")
+st.title("Candlestick Chart for " + ticker_input)
 
 # Function to create TD Sequential Chart
-def create_td_sequential_chart(df, start_date, end_date):
+def create_td_sequential_chart(df):
     if df.empty:
         st.write("No data available for the selected ticker.")
         return
+    
+    # Ensure index is datetime
+    df.index = pd.to_datetime(df.index)
+
     fig = go.Figure(data=[go.Candlestick(
         x=df.index,
         open=df['Open'],
@@ -33,6 +37,11 @@ def create_td_sequential_chart(df, start_date, end_date):
         low=df['Low'],
         close=df['Close'])
     ])
+    
     fig.update_xaxes(type='category')
+    fig.update_layout(title='Candlestick Chart', xaxis_title='Date', yaxis_title='Price')
+    
     st.plotly_chart(fig)
 
+# Call the function to create the chart
+create_td_sequential_chart(data)
