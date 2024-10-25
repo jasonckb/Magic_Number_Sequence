@@ -345,27 +345,27 @@ def calculate_td_sequential(df):
                     
             elif buy_countdown_active:
                 if waiting_for_buy_13:
+                    # Always check bar 8 rule regardless of deferred state
                     if safe_compare(df['Low'].iloc[i], bar8_close_buy, '<='):
-                        if not buy_countdown_deferred:  # Only print 13 if not in deferred state
-                            buy_countdown[i] = 13
-                            buy_countdown_active = False
-                            waiting_for_buy_13 = False
-                            buy_countdown_bars = []
-                            need_new_buy_setup = True
-                            potential_recycle_start = -1
-                            recycle_countdown_type = None
+                        # Bar 8 rule is met - print 13 and end countdown
+                        buy_countdown[i] = 13
+                        buy_countdown_active = False
+                        waiting_for_buy_13 = False
+                        buy_countdown_bars = []
+                        need_new_buy_setup = True
+                        potential_recycle_start = -1
+                        recycle_countdown_type = None
+                        buy_countdown_deferred = False
                     elif safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
-                        if buy_countdown_deferred:
-                            buy_deferred[i] = True  # Keep printing '+'
-                        else:
-                            buy_countdown_deferred = True  # First time hitting deferred state
-                            buy_deferred[i] = True
-                            buy_countdown[i] = 0  # Clear the countdown number
+                        # Bar 8 rule not met - print + but keep checking
+                        buy_deferred[i] = True
+                        buy_countdown[i] = 0  # Clear any countdown number
+                        buy_countdown_deferred = True
                 else:
                     if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
                         buy_countdown_bars.append(i)
                         
-                        if not buy_countdown_deferred and buy_setup_count < 12:
+                        if buy_setup_count < 12:
                             buy_setup_count += 1
                             buy_countdown[i] = buy_setup_count
                             if buy_setup_count == 12:
@@ -388,27 +388,27 @@ def calculate_td_sequential(df):
                     
             elif sell_countdown_active:
                 if waiting_for_sell_13:
+                    # Always check bar 8 rule regardless of deferred state
                     if safe_compare(df['High'].iloc[i], bar8_close_sell, '>='):
-                        if not sell_countdown_deferred:  # Only print 13 if not in deferred state
-                            sell_countdown[i] = 13
-                            sell_countdown_active = False
-                            waiting_for_sell_13 = False
-                            sell_countdown_bars = []
-                            need_new_sell_setup = True
-                            potential_recycle_start = -1
-                            recycle_countdown_type = None
+                        # Bar 8 rule is met - print 13 and end countdown
+                        sell_countdown[i] = 13
+                        sell_countdown_active = False
+                        waiting_for_sell_13 = False
+                        sell_countdown_bars = []
+                        need_new_sell_setup = True
+                        potential_recycle_start = -1
+                        recycle_countdown_type = None
+                        sell_countdown_deferred = False
                     elif safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
-                        if sell_countdown_deferred:
-                            sell_deferred[i] = True  # Keep printing '+'
-                        else:
-                            sell_countdown_deferred = True  # First time hitting deferred state
-                            sell_deferred[i] = True
-                            sell_countdown[i] = 0  # Clear the countdown number
+                        # Bar 8 rule not met - print + but keep checking
+                        sell_deferred[i] = True
+                        sell_countdown[i] = 0  # Clear any countdown number
+                        sell_countdown_deferred = True
                 else:
                     if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
                         sell_countdown_bars.append(i)
                         
-                        if not sell_countdown_deferred and sell_setup_count < 12:
+                        if sell_setup_count < 12:
                             sell_setup_count += 1
                             sell_countdown[i] = sell_setup_count
                             if sell_setup_count == 12:
