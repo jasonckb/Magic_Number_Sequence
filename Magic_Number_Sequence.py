@@ -20,17 +20,46 @@ def check_ticker_format(ticker):
 
 # Function to clean Yahoo Finance data
 def clean_yahoo_data(df):
+    """
+    Clean and validate Yahoo Finance data
+    Returns cleaned DataFrame or raises an informative error
+    """
     try:
+        # First check if we have any data
+        if df.empty:
+            st.error("No data received from Yahoo Finance")
+            return pd.DataFrame()
+            
+        # Check if we have all required columns
+        required_columns = ['Open', 'High', 'Low', 'Close']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            st.error(f"Missing required columns: {', '.join(missing_columns)}")
+            return pd.DataFrame()
+        
+        # Check for all NaN values
+        if df[required_columns].isna().all().all():
+            st.error("All values are NaN. This usually means no trading data is available for this ticker.")
+            return pd.DataFrame()
+            
         # Convert the DataFrame to numeric, coerce errors to NaN
-        df_cleaned = df.apply(pd.to_numeric, errors='coerce')
+        df_cleaned = df.copy()
+        for col in required_columns:
+            df_cleaned[col] = pd.to_numeric(df_cleaned[col], errors='coerce')
         
         # Drop any rows where all OHLC values are NaN
-        df_cleaned = df_cleaned.dropna(subset=['Open', 'High', 'Low', 'Close'])
+        df_cleaned = df_cleaned.dropna(subset=required_columns, how='all')
         
+        # Check if we have any data left after cleaning
+        if len(df_cleaned) == 0:
+            st.error("No valid OHLC data remains after cleaning")
+            return pd.DataFrame()
+            
         # Preserve the datetime index
         df_cleaned.index = pd.to_datetime(df.index)
         
         return df_cleaned
+        
     except Exception as e:
         st.error(f"Error in data cleaning: {str(e)}")
         return pd.DataFrame()
@@ -479,39 +508,58 @@ def main():
         formatted_ticker = check_ticker_format(ticker_input)
         st.write("Formatted Ticker: ", formatted_ticker)
         
-        # Download data
-        end_date = pd.Timestamp.today()
-        start_date = end_date - pd.DateOffset(years=1)
-        data = yf.download(formatted_ticker, start=start_date, end=end_date)
-        
-        if not data.empty:
+        # Add download status
+        with st.status("Downloading data...") as status:
+            # Download data
+            end_date = pd.Timestamp.today()
+            start_date = end_date - pd.DateOffset(years=1)
+            
+            try:
+                data = yf.download(formatted_ticker, start=start_date, end=end_date, progress=False)
+                if data.empty:
+                    st.error(f"No data available for {formatted_ticker}. This could mean:")
+                    st.write("- The ticker symbol might be incorrect")
+                    st.write("- The stock might not be listed or actively trading")
+                    st.write("- There might be an issue with the data provider")
+                    return
+                status.update(label="Data downloaded successfully", state="complete")
+            except Exception as e:
+                st.error(f"Error downloading data: {str(e)}")
+                return
+            
             # Clean and verify data
-            data = clean_yahoo_data(data)
+            with st.status("Cleaning data...") as clean_status:
+                data = clean_yahoo_data(data)
+                if not data.empty:
+                    clean_status.update(label="Data cleaned successfully", state="complete")
+                else:
+                    clean_status.update(label="Data cleaning failed", state="error")
+                    return
             
             if len(data) > 0:
-                st.write(f"Data loaded successfully: {len(data)} rows")
-                st.write(f"Date range: {data.index[0]} to {data.index[-1]}")
-                st.write(f"Price range: ${data['Low'].min():.2f} to ${data['High'].max():.2f}")
+                # Add data info expander
+                with st.expander("Data Information"):
+                    st.write(f"Total rows: {len(data)}")
+                    st.write(f"Date range: {data.index[0].strftime('%Y-%m-%d')} to {data.index[-1].strftime('%Y-%m-%d')}")
+                    st.write(f"Price range: ${data['Low'].min():.2f} to ${data['High'].max():.2f}")
+                    st.write("Sample of the data:")
+                    st.dataframe(data.head())
                 
                 # Create and display chart
-                fig = create_td_sequential_chart(data, formatted_ticker)
-                if fig is not None:
-                    st.plotly_chart(fig, use_container_width=True)
+                with st.status("Creating chart...") as chart_status:
+                    fig = create_td_sequential_chart(data, formatted_ticker)
+                    if fig is not None:
+                        st.plotly_chart(fig, use_container_width=True)
+                        chart_status.update(label="Chart created successfully", state="complete")
+                    else:
+                        chart_status.update(label="Chart creation failed", state="error")
                 
-                # Display recent data
-                st.write("Recent Data:")
-                st.dataframe(data.tail())
             else:
-                st.error("No valid data after cleaning")
-        else:
-            st.error(f"No data available for {formatted_ticker}")
-            
+                st.error("Unable to process the data. Please check the ticker symbol and try again.")
+                
     except Exception as e:
-        st.error(f"Error occurred: {str(e)}")
-        st.write("Full error details:", str(e))
+        st.error("An unexpected error occurred")
+        st.exception(e)
 
 if __name__ == "__main__":
     main()
-
-
-
