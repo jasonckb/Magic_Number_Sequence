@@ -297,7 +297,7 @@ def calculate_td_sequential(df):
         # Track if setup 1 occurs at this bar
         setup_one_at_current_bar = False
         
-        # Setup flips
+        # Setup flips - Keep original exactly as is
         if check_buy_flip(df, i) and not sell_countdown_active:
             # Allow setup 1 if either: no plus seen, or this bar has 13
             if not buy_plus_without_setup or (waiting_for_buy_13 and safe_compare(df['Low'].iloc[i], bar8_close_buy, '<=')):
@@ -315,49 +315,55 @@ def calculate_td_sequential(df):
                 sell_setup[i] = 1
                 setup_one_at_current_bar = True
         
-        # Buy setup phase
-        if buy_setup_active:
+        # Buy setup phase - Add consecutive check
+        if buy_setup_active and not sell_countdown_active:
             if check_buy_setup(df, i):
                 if i > 0 and buy_setup[i-1] > 0:
-                    current_count = buy_setup[i-1] + 1  # Must be consecutive
-                    if current_count <= 9:
-                        buy_setup[i] = current_count
-                        if current_count == 9:
-                            if check_buy_perfection(df, setup_start_idx, i):
-                                buy_perfection[i] = 1
-                            buy_setup_active = False
-                            buy_setup_complete = True
-                            need_new_buy_setup = False
-                            resistance = get_tdst_level(df, setup_start_idx, i, True)
-                            tdst.add_resistance(resistance, df.index[i])
+                    if (i - setup_start_idx) == buy_setup[i-1]:  # Add consecutive check
+                        current_count = buy_setup[i-1] + 1
+                        if current_count <= 9:
+                            buy_setup[i] = current_count
+                            if current_count == 9:
+                                if check_buy_perfection(df, setup_start_idx, i):
+                                    buy_perfection[i] = 1
+                                buy_setup_active = False
+                                buy_setup_complete = True
+                                need_new_buy_setup = False
+                                resistance = get_tdst_level(df, setup_start_idx, i, True)
+                                tdst.add_resistance(resistance, df.index[i])
+                    else:
+                        buy_setup_active = False  # Not consecutive, cancel setup
+                        buy_setup[setup_start_idx:i+1] = 0
                 else:
                     buy_setup[i] = 1
             else:
-                # Cancel the whole setup if sequence breaks
-                buy_setup_active = False
-                buy_setup[setup_start_idx:i+1] = 0  # Clear any partial setup numbers
+                buy_setup_active = False  # 4-bar rule failed, cancel setup
+                buy_setup[setup_start_idx:i+1] = 0
         
-        # Sell setup phase
-        if sell_setup_active:
+        # Sell setup phase - Add consecutive check
+        if sell_setup_active and not buy_countdown_active:
             if check_sell_setup(df, i):
                 if i > 0 and sell_setup[i-1] > 0:
-                    current_count = sell_setup[i-1] + 1  # Must be consecutive
-                    if current_count <= 9:
-                        sell_setup[i] = current_count
-                        if current_count == 9:
-                            if check_sell_perfection(df, setup_start_idx, i):
-                                sell_perfection[i] = 1
-                            sell_setup_active = False
-                            sell_setup_complete = True
-                            need_new_sell_setup = False
-                            support = get_tdst_level(df, setup_start_idx, i, False)
-                            tdst.add_support(support, df.index[i])
+                    if (i - setup_start_idx) == sell_setup[i-1]:  # Add consecutive check
+                        current_count = sell_setup[i-1] + 1
+                        if current_count <= 9:
+                            sell_setup[i] = current_count
+                            if current_count == 9:
+                                if check_sell_perfection(df, setup_start_idx, i):
+                                    sell_perfection[i] = 1
+                                sell_setup_active = False
+                                sell_setup_complete = True
+                                need_new_sell_setup = False
+                                support = get_tdst_level(df, setup_start_idx, i, False)
+                                tdst.add_support(support, df.index[i])
+                    else:
+                        sell_setup_active = False  # Not consecutive, cancel setup
+                        sell_setup[setup_start_idx:i+1] = 0
                 else:
                     sell_setup[i] = 1
             else:
-                # Cancel the whole setup if sequence breaks
-                sell_setup_active = False
-                sell_setup[setup_start_idx:i+1] = 0  # Clear any partial setup numbers
+                sell_setup_active = False  # 4-bar rule failed, cancel setup
+                sell_setup[setup_start_idx:i+1] = 0
         
         # Buy countdown phase
         if not sell_countdown_active:
