@@ -12,30 +12,33 @@ st.title("Magic Number Sequence by Jason Chan")
 # Sidebar input
 ticker_input = st.sidebar.text_input("Enter ticker", "AAPL")
 
-# Function to check if the ticker is formatted correctly
 def check_ticker_format(ticker):
     if ticker.isdigit():
         return ticker.zfill(4) + ".HK"
     return ticker.upper()
 
-# Function to clean Yahoo Finance data
 def clean_yahoo_data(df):
-    """
-    Clean and validate Yahoo Finance data
-    Returns cleaned DataFrame or raises an informative error
-    """
     try:
-        # First check if we have any data
-        if df.empty:
-            st.error("No data received from Yahoo Finance")
-            return pd.DataFrame()
+        # Handle multi-level columns
+        if isinstance(df.columns, pd.MultiIndex):
+            # Get the first level of column names and the ticker
+            base_cols = df.columns.get_level_values(0).unique()
+            ticker = df.columns.get_level_values(1)[0]  # Get ticker from any column
             
-        # Check if we have all required columns
-        required_columns = ['Open', 'High', 'Low', 'Close']
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        if missing_columns:
-            st.error(f"Missing required columns: {', '.join(missing_columns)}")
-            return pd.DataFrame()
+            # Create a new dataframe with single-level columns
+            df_cleaned = pd.DataFrame(index=df.index)
+            for col in base_cols:
+                df_cleaned[col] = df[(col, ticker)]
+        else:
+            df_cleaned = df.copy()
+        
+        # Drop any rows with missing values
+        df_cleaned = df_cleaned.dropna(subset=['Open', 'High', 'Low', 'Close'])
+        
+        return df_cleaned
+    except Exception as e:
+        st.error(f"Error in data cleaning: {str(e)}")
+        return pd.DataFrame()
 
         # Make a copy of the DataFrame to avoid modifying the original
         df_cleaned = df.copy()
@@ -520,66 +523,31 @@ def main():
         start_date = end_date - pd.DateOffset(years=1)
         
         st.write("Downloading data...")
-        try:
-            data = yf.download(formatted_ticker, start=start_date, end=end_date, progress=False)
-            if data.empty:
-                st.error(f"No data available for {formatted_ticker}. This could mean:")
-                st.write("- The ticker symbol might be incorrect")
-                st.write("- The stock might not be listed or actively trading")
-                st.write("- There might be an issue with the data provider")
-                st.write(f"Attempted to download: {formatted_ticker}")
-                return
+        data = yf.download(formatted_ticker, start=start_date, end=end_date, progress=False)
+        
+        if not data.empty:
+            # Clean and verify data
+            data = clean_yahoo_data(data)
+            
+            if len(data) > 0:
+                st.success("Data processed successfully!")
                 
-            # Debug information
-            st.write("Raw data shape:", data.shape)
-            st.write("Raw data columns:", data.columns.tolist())
-            
-            st.success("Data downloaded successfully")
-        except Exception as e:
-            st.error(f"Error downloading data: {str(e)}")
-            return
-        
-        # Clean and verify data
-        st.write("Cleaning data...")
-        data = clean_yahoo_data(data)
-        if data.empty:
-            st.error("Data cleaning failed")
-            return
-        st.success("Data cleaned successfully")
-        
-        if len(data) > 0:
-            # Display data information
-            st.subheader("Data Information")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Total Rows", len(data))
-                st.metric("Start Date", data.index[0].strftime('%Y-%m-%d'))
-            with col2:
-                st.metric("End Date", data.index[-1].strftime('%Y-%m-%d'))
-                st.metric("Price Range", f"${data['Low'].min():.2f} - ${data['High'].max():.2f}")
-            
-            # Show sample data in an expander
-            with st.expander("View Sample Data"):
-                st.write("First 5 rows:")
-                st.dataframe(data.head())
-                st.write("Data types:")
-                st.write(data.dtypes)
-            
-            # Create and display chart
-            st.write("Creating chart...")
-            fig = create_td_sequential_chart(data, formatted_ticker)
-            if fig is not None:
-                st.plotly_chart(fig, use_container_width=True)
-                st.success("Chart created successfully")
+                # Create and display chart
+                st.write("Creating chart...")
+                fig = create_td_sequential_chart(data, formatted_ticker)
+                if fig is not None:
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                # Display recent data
+                with st.expander("View Recent Data"):
+                    st.dataframe(data.tail())
             else:
-                st.error("Chart creation failed")
-        
+                st.error("No valid data after cleaning")
         else:
-            st.error("Unable to process the data. Please check the ticker symbol and try again.")
+            st.error(f"No data available for {formatted_ticker}")
             
     except Exception as e:
-        st.error("An unexpected error occurred")
-        st.exception(e)
+        st.error(f"Error occurred: {str(e)}")
 
 if __name__ == "__main__":
     main()
