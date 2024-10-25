@@ -123,7 +123,7 @@ class TDSTLevels:
     def check_support_violation(self, price):
         if self.active_support is not None:
             return safe_compare(price, self.active_support, '<')
-        return False10)
+        return False
             
 def calculate_td_sequential(df):
     # Initialize arrays
