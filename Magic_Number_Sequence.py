@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 import plotly.graph_objs as go
+import numpy as np
 
 # Set page configuration
 st.set_page_config(layout="wide")
@@ -17,20 +18,25 @@ def check_ticker_format(ticker):
 
 # Function to clean Yahoo Finance data
 def clean_yahoo_data(df):
-    # Convert index to datetime if not already
-    df.index = pd.to_datetime(df.index)
-    
-    # Remove any row where any of OHLC values are not numeric
-    numeric_df = df[pd.to_numeric(df['Open'], errors='coerce').notnull() &
-                   pd.to_numeric(df['High'], errors='coerce').notnull() &
-                   pd.to_numeric(df['Low'], errors='coerce').notnull() &
-                   pd.to_numeric(df['Close'], errors='coerce').notnull()]
-    
-    # Convert OHLC columns to numeric
-    for col in ['Open', 'High', 'Low', 'Close']:
-        numeric_df[col] = pd.to_numeric(numeric_df[col], errors='coerce')
-    
-    return numeric_df
+    try:
+        # Make a copy to avoid modifying original data
+        df = df.copy()
+        
+        # Ensure all OHLC columns are float type
+        for col in ['Open', 'High', 'Low', 'Close']:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+        # Drop any rows with NaN values
+        df = df.dropna(subset=['Open', 'High', 'Low', 'Close'])
+        
+        # Reset index if needed while keeping dates
+        if not isinstance(df.index, pd.DatetimeIndex):
+            df.index = pd.to_datetime(df.index)
+            
+        return df
+    except Exception as e:
+        st.error(f"Error in data cleaning: {str(e)}")
+        return pd.DataFrame()
 
 # Format the ticker input
 formatted_ticker = check_ticker_format(ticker_input)
@@ -45,22 +51,25 @@ try:
     # Clean the data
     data = clean_yahoo_data(data)
     
-    # Check if data is empty
-    if data.empty:
-        st.error(f"No data available for {formatted_ticker}")
+    # Check if data is empty or has invalid values
+    if data.empty or len(data) == 0:
+        st.error(f"No valid data available for {formatted_ticker}")
     else:
         # Title and layout
         st.title("Candlestick Chart for " + formatted_ticker)
 
         # Function to create TD Sequential Chart
         def create_td_sequential_chart(df):
+            # Ensure data types are correct
+            x_dates = df.index.astype(str).tolist()
+            
             # Create figure
             fig = go.Figure(data=[go.Candlestick(
-                x=df.index,
-                open=df['Open'],
-                high=df['High'],
-                low=df['Low'],
-                close=df['Close'],
+                x=x_dates,
+                open=df['Open'].tolist(),
+                high=df['High'].tolist(),
+                low=df['Low'].tolist(),
+                close=df['Close'].tolist(),
                 name=formatted_ticker
             )])
             
