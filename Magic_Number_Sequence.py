@@ -8,7 +8,7 @@ import numpy as np
 st.set_page_config(layout="wide")
 
 # Sidebar for input
-ticker_input = st.sidebar.text_input("Enter ticker", "AAPL")
+ticker_inputo = st.sidebar.text_input("Enter ticker", "AAPL")
 
 # Function to check if the ticker is formatted correctly
 def check_ticker_format(ticker):
@@ -19,21 +19,16 @@ def check_ticker_format(ticker):
 # Function to clean Yahoo Finance data
 def clean_yahoo_data(df):
     try:
-        # Make a copy to avoid modifying original data
-        df = df.copy()
+        # Convert the DataFrame to numeric, coerce errors to NaN
+        df_cleaned = df.apply(pd.to_numeric, errors='coerce')
         
-        # Ensure all OHLC columns are float type
-        for col in ['Open', 'High', 'Low', 'Close']:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
+        # Drop any rows where all OHLC values are NaN
+        df_cleaned = df_cleaned.dropna(subset=['Open', 'High', 'Low', 'Close'])
         
-        # Drop any rows with NaN values
-        df = df.dropna(subset=['Open', 'High', 'Low', 'Close'])
+        # Preserve the datetime index
+        df_cleaned.index = pd.to_datetime(df.index)
         
-        # Reset index if needed while keeping dates
-        if not isinstance(df.index, pd.DatetimeIndex):
-            df.index = pd.to_datetime(df.index)
-            
-        return df
+        return df_cleaned
     except Exception as e:
         st.error(f"Error in data cleaning: {str(e)}")
         return pd.DataFrame()
@@ -46,10 +41,16 @@ try:
     # Download 1 year of data
     end_date = pd.Timestamp.today()
     start_date = end_date - pd.DateOffset(years=1)
-    data = yf.download(formatted_ticker, start=start_date, end=end_date, progress=False)
+    
+    # Create ticker object
+    ticker = yf.Ticker(formatted_ticker)
+    
+    # Get historical data
+    data = ticker.history(start=start_date, end=end_date)
     
     # Clean the data
-    data = clean_yahoo_data(data)
+    if not data.empty:
+        data = clean_yahoo_data(data)
     
     # Check if data is empty or has invalid values
     if data.empty or len(data) == 0:
@@ -60,16 +61,13 @@ try:
 
         # Function to create TD Sequential Chart
         def create_td_sequential_chart(df):
-            # Ensure data types are correct
-            x_dates = df.index.astype(str).tolist()
-            
             # Create figure
             fig = go.Figure(data=[go.Candlestick(
-                x=x_dates,
-                open=df['Open'].tolist(),
-                high=df['High'].tolist(),
-                low=df['Low'].tolist(),
-                close=df['Close'].tolist(),
+                x=df.index,
+                open=df['Open'],
+                high=df['High'],
+                low=df['Low'],
+                close=df['Close'],
                 name=formatted_ticker
             )])
             
