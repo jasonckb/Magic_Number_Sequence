@@ -1,9 +1,10 @@
 import streamlit as st
-import yfinance as yf
 import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
-import plotly.graph_objects as go
+import yfinance as yf
+import plotly.graph_objs as go
+
+# Set page configuration
+st.set_page_config(layout="wide")
 
 # Sidebar for input
 ticker_input = st.sidebar.text_input("Enter ticker", "AAPL")
@@ -18,7 +19,6 @@ start_date = end_date - pd.DateOffset(years=1)
 data = yf.download(ticker_input, start=start_date, end=end_date)
 
 # Title and layout
-st.set_page_config(layout="wide")
 st.title("Magic Number Sequence by Jason Chan")
 
 # Function to create TD Sequential Chart
