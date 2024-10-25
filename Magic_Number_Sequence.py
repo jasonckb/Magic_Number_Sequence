@@ -221,20 +221,20 @@ def calculate_td_sequential(df):
             sell_countdown_bars = []
             waiting_for_sell_13 = False
         
-        # Setup flips
-        if check_buy_flip(df, i):
+        # Setup flips - modified to check for active countdown phases
+        if check_buy_flip(df, i) and not sell_countdown_active:  # Only allow buy setup if sell countdown is not active
             buy_setup_active = True
             sell_setup_active = False
             setup_start_idx = i
             buy_setup[i] = 1
-        elif check_sell_flip(df, i):
+        elif check_sell_flip(df, i) and not buy_countdown_active:  # Only allow sell setup if buy countdown is not active
             sell_setup_active = True
             buy_setup_active = False
             setup_start_idx = i
             sell_setup[i] = 1
         
-        # Buy setup phase
-        if buy_setup_active:
+        # Buy setup phase - only if sell countdown is not active
+        if buy_setup_active and not sell_countdown_active:
             if check_buy_setup(df, i):
                 if i > 0 and buy_setup[i-1] > 0:
                     current_count = buy_setup[i-1] + 1
@@ -253,8 +253,8 @@ def calculate_td_sequential(df):
             else:
                 buy_setup_active = False
         
-        # Sell setup phase
-        if sell_setup_active:
+        # Sell setup phase - only if buy countdown is not active
+        if sell_setup_active and not buy_countdown_active:
             if check_sell_setup(df, i):
                 if i > 0 and sell_setup[i-1] > 0:
                     current_count = sell_setup[i-1] + 1
@@ -274,7 +274,7 @@ def calculate_td_sequential(df):
                 sell_setup_active = False
         
         # Buy countdown phase - only if sell countdown is not active
-        if not sell_countdown_active:  # New condition
+        if not sell_countdown_active:
             if buy_setup_complete and not buy_countdown_active and not need_new_buy_setup:
                 if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
                     buy_countdown_active = True
@@ -311,7 +311,7 @@ def calculate_td_sequential(df):
                                     waiting_for_buy_13 = True
         
         # Sell countdown phase - only if buy countdown is not active
-        if not buy_countdown_active:  # New condition
+        if not buy_countdown_active:
             if sell_setup_complete and not sell_countdown_active and not need_new_sell_setup:
                 if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
                     sell_countdown_active = True
