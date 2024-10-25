@@ -183,6 +183,14 @@ def check_bar8_rule(df, current_idx, bar8_idx, is_buy_countdown):
     else:
         return safe_compare(df['High'].iloc[current_idx], df['Close'].iloc[bar8_idx], '>=')
         
+def check_recycle_completion(current_idx, start_idx, setup_values):
+    """Check if a recycle condition has completed within 18 bars"""
+    if start_idx < 0 or current_idx - start_idx > 18:
+        return False
+    # Find the maximum setup value in the range
+    max_setup = max(setup_values[start_idx:current_idx + 1])
+    return max_setup == 9
+
 def calculate_td_sequential(df):
     # Initialize arrays
     buy_setup = np.zeros(len(df))
