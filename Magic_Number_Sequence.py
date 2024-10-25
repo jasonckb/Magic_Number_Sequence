@@ -299,14 +299,14 @@ def calculate_td_sequential(df):
         
         # Setup flips - only check opposite direction's plus status
         if check_buy_flip(df, i):
-            if not sell_plus_without_setup:  # Check opposite direction's plus flag
+            if not sell_plus_without_setup or (buy_countdown[i] == 13):  # Allow if it's bar 13
                 buy_setup_active = True
                 sell_setup_active = False
                 setup_start_idx = i
                 buy_setup[i] = 1
                 setup_one_at_current_bar = True
         elif check_sell_flip(df, i):
-            if not buy_plus_without_setup:  # Check opposite direction's plus flag
+            if not buy_plus_without_setup or (sell_countdown[i] == 13):  # Allow if it's bar 13
                 sell_setup_active = True
                 buy_setup_active = False
                 setup_start_idx = i
