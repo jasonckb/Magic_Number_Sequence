@@ -48,25 +48,6 @@ def plot_stock_chart(data, ticker):
     ))       
       
 
-    fig.update_layout(
-        title=f"{ticker} Stock Price",
-        xaxis_title="Date",
-        yaxis_title="Price",
-        xaxis_rangeslider_visible=False,
-        height=600,
-        width=800,
-        margin=dict(l=50, r=150, t=50, b=50),
-        showlegend=False,
-        font=dict(size=14),
-        xaxis2=dict(
-            side='top',
-            overlaying='x',
-            range=[0, max_volume],
-            showgrid=False,
-            showticklabels=False,
-        ),
-    )
-
     # Set x-axis to show only trading days and extend range for annotations
     fig.update_xaxes(
         rangebreaks=[
