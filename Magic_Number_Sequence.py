@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 st.set_page_config(layout="wide")
 st.title("Magic Number Sequence by Jason Chan")
 
+# Sidebar input
+ticker_input = st.sidebar.text_input("Enter ticker", "AAPL")
 
 # Function to check if the ticker is formatted correctly
 def check_ticker_format(ticker):
@@ -28,20 +30,6 @@ def clean_yahoo_data(df):
         # Preserve the datetime index
         df_cleaned.index = pd.to_datetime(df.index)
         
-        return df_cleaned
-    except Exception as e:
-        st.error(f"Error in data cleaning: {str(e)}")
-        return pd.DataFrame()
-
-# Format the ticker input
-formatted_ticker = check_ticker_format(ticker_input)
-st.write("Formatted Ticker: ", formatted_ticker)
-
-def clean_yahoo_data(df):
-    try:
-        df_cleaned = df.apply(pd.to_numeric, errors='coerce')
-        df_cleaned = df_cleaned.dropna(subset=['Open', 'High', 'Low', 'Close'])
-        df_cleaned.index = pd.to_datetime(df.index)
         return df_cleaned
     except Exception as e:
         st.error(f"Error in data cleaning: {str(e)}")
@@ -146,7 +134,7 @@ class TDSTLevels:
         if self.active_support is not None:
             return safe_compare(price, self.active_support, '<')
         return False
-            
+
 def calculate_td_sequential(df):
     # Initialize arrays
     buy_setup = np.zeros(len(df))
@@ -318,7 +306,7 @@ def calculate_td_sequential(df):
     
     return buy_setup, sell_setup, buy_countdown, sell_countdown, buy_perfection, sell_perfection, buy_deferred, sell_deferred, tdst
 
-def create_td_sequential_chart(df):
+def create_td_sequential_chart(df, ticker):
     if df.empty:
         return None
         
@@ -486,15 +474,15 @@ def create_td_sequential_chart(df):
     return fig
 
 def main():
-    # Sidebar input
-    ticker_input = st.sidebar.text_input("Enter ticker", "AAPL")
-    ticker = check_ticker_format(ticker_input)
-    
     try:
+        # Get formatted ticker
+        formatted_ticker = check_ticker_format(ticker_input)
+        st.write("Formatted Ticker: ", formatted_ticker)
+        
         # Download data
         end_date = pd.Timestamp.today()
         start_date = end_date - pd.DateOffset(years=1)
-        data = yf.download(ticker, start=start_date, end=end_date)
+        data = yf.download(formatted_ticker, start=start_date, end=end_date)
         
         if not data.empty:
             # Clean and verify data
@@ -506,7 +494,7 @@ def main():
                 st.write(f"Price range: ${data['Low'].min():.2f} to ${data['High'].max():.2f}")
                 
                 # Create and display chart
-                fig = create_td_sequential_chart(data)
+                fig = create_td_sequential_chart(data, formatted_ticker)
                 if fig is not None:
                     st.plotly_chart(fig, use_container_width=True)
                 
@@ -516,7 +504,7 @@ def main():
             else:
                 st.error("No valid data after cleaning")
         else:
-            st.error(f"No data available for {ticker}")
+            st.error(f"No data available for {formatted_ticker}")
             
     except Exception as e:
         st.error(f"Error occurred: {str(e)}")
