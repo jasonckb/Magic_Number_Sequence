@@ -298,15 +298,18 @@ def calculate_td_sequential(df):
         setup_one_at_current_bar = False
         
         # Setup flips
+        setup_one_at_current_bar = False
+        has_thirteen_at_current_bar = (buy_countdown[i] == 13) or (sell_countdown[i] == 13)  # Track if 13 appears at current bar
+        
         if check_buy_flip(df, i) and not sell_countdown_active:
-            if not buy_plus_without_setup:  # Only allow if we haven't seen a lone '+'
+            if (not buy_plus_without_setup) or (buy_countdown[i] == 13):  # Allow setup 1 if bar shows 13
                 buy_setup_active = True
                 sell_setup_active = False
                 setup_start_idx = i
                 buy_setup[i] = 1
                 setup_one_at_current_bar = True
         elif check_sell_flip(df, i) and not buy_countdown_active:
-            if not sell_plus_without_setup:  # Only allow if we haven't seen a lone '+'
+            if (not sell_plus_without_setup) or (sell_countdown[i] == 13):  # Allow setup 1 if bar shows 13
                 sell_setup_active = True
                 buy_setup_active = False
                 setup_start_idx = i
