@@ -288,15 +288,19 @@ def calculate_td_sequential(df):
         
         # Setup flips
         if check_buy_flip(df, i) and not sell_countdown_active:
-            buy_setup_active = True
-            sell_setup_active = False
-            setup_start_idx = i
-            buy_setup[i] = 1
+            # Check if previous bar had a '+'
+            if i == 0 or (not sell_deferred[i-1] and not buy_deferred[i-1]):
+                buy_setup_active = True
+                sell_setup_active = False
+                setup_start_idx = i
+                buy_setup[i] = 1
         elif check_sell_flip(df, i) and not buy_countdown_active:
-            sell_setup_active = True
-            buy_setup_active = False
-            setup_start_idx = i
-            sell_setup[i] = 1
+            # Check if previous bar had a '+'
+            if i == 0 or (not buy_deferred[i-1] and not sell_deferred[i-1]):
+                sell_setup_active = True
+                buy_setup_active = False
+                setup_start_idx = i
+                sell_setup[i] = 1
         
         # Buy setup phase
         if buy_setup_active and not sell_countdown_active:
