@@ -299,14 +299,16 @@ def calculate_td_sequential(df):
         
         # Setup flips
         if check_buy_flip(df, i) and not sell_countdown_active:
-            if not buy_plus_without_setup:  # Only allow if we haven't seen a lone '+'
+            # Allow setup 1 if either: no plus seen, or this bar has 13
+            if not buy_plus_without_setup or (waiting_for_buy_13 and safe_compare(df['Low'].iloc[i], bar8_close_buy, '<=')):
                 buy_setup_active = True
                 sell_setup_active = False
                 setup_start_idx = i
                 buy_setup[i] = 1
                 setup_one_at_current_bar = True
         elif check_sell_flip(df, i) and not buy_countdown_active:
-            if not sell_plus_without_setup:  # Only allow if we haven't seen a lone '+'
+            # Allow setup 1 if either: no plus seen, or this bar has 13
+            if not sell_plus_without_setup or (waiting_for_sell_13 and safe_compare(df['High'].iloc[i], bar8_close_sell, '>=')):
                 sell_setup_active = True
                 buy_setup_active = False
                 setup_start_idx = i
