@@ -365,11 +365,11 @@ def calculate_td_sequential(df):
                     buy_setup_count = 1
                     buy_countdown_bars = [i]
                     waiting_for_buy_13 = False
-                    bar8_close_buy = None  # Reset bar 8 reference
+                    bar8_close_buy = None
                     
             elif buy_countdown_active:
                 if waiting_for_buy_13:
-                    # Only check bar 8 rule when waiting for 13
+                    # If bar 8 rule is met, mark 13 without checking 2-bar rule
                     if safe_compare(df['Low'].iloc[i], bar8_close_buy, '<='):
                         buy_countdown[i] = 13
                         buy_countdown_active = False
@@ -378,11 +378,13 @@ def calculate_td_sequential(df):
                         need_new_buy_setup = True
                         buy_plus_without_setup = False
                     else:
-                        buy_deferred[i] = True
-                        if not setup_one_at_current_bar:
-                            buy_plus_without_setup = True
+                        # For '+', still need 2-bar rule
+                        if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
+                            buy_deferred[i] = True
+                            if not setup_one_at_current_bar:
+                                buy_plus_without_setup = True
                 else:
-                    if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):  # 2 bar rule for count 1-12
+                    if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
                         buy_countdown_bars.append(i)
                         if buy_setup_count < 12:
                             buy_setup_count += 1
@@ -392,10 +394,21 @@ def calculate_td_sequential(df):
                             elif buy_setup_count == 12:
                                 waiting_for_buy_13 = True
 
-            # Similarly for sell countdown
+        # Sell countdown phase
+        if not buy_countdown_active:
+            if sell_setup_complete and not sell_countdown_active and not need_new_sell_setup:
+                if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
+                    sell_countdown_active = True
+                    sell_setup_complete = False
+                    sell_countdown[i] = 1
+                    sell_setup_count = 1
+                    sell_countdown_bars = [i]
+                    waiting_for_sell_13 = False
+                    bar8_close_sell = None
+                    
             elif sell_countdown_active:
                 if waiting_for_sell_13:
-                    # Only check bar 8 rule when waiting for 13
+                    # If bar 8 rule is met, mark 13 without checking 2-bar rule
                     if safe_compare(df['High'].iloc[i], bar8_close_sell, '>='):
                         sell_countdown[i] = 13
                         sell_countdown_active = False
@@ -404,11 +417,13 @@ def calculate_td_sequential(df):
                         need_new_sell_setup = True
                         sell_plus_without_setup = False
                     else:
-                        sell_deferred[i] = True
-                        if not setup_one_at_current_bar:
-                            sell_plus_without_setup = True
+                        # For '+', still need 2-bar rule
+                        if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
+                            sell_deferred[i] = True
+                            if not setup_one_at_current_bar:
+                                sell_plus_without_setup = True
                 else:
-                    if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):  # 2 bar rule for count 1-12
+                    if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
                         sell_countdown_bars.append(i)
                         if sell_setup_count < 12:
                             sell_setup_count += 1
