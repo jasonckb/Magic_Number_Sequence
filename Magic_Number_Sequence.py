@@ -33,11 +33,3 @@ def create_td_sequential_chart(df, start_date, end_date):
     fig.update_xaxes(type='category')
     st.plotly_chart(fig)
 
-# Plot the chart
-create_td_sequential_chart(data, start_date, end_date)
-```
-
-This code sets up a Streamlit app with the specifications you provided. It allows input of a ticker symbol, defaults to AAPL, formats HK stock tickers, downloads one year of historical data, and plots an interactive candlestick chart using Plotly, excluding non-trading dates on the x-axis. The layout is set to wide, and the chart title is "Magic Number Sequence by Jason Chan."
-
-Sources:
-[1]  (https://github.com/juanlazarde/fybot/tree/06bd5a8b175255a57a9867d6cbe4f3ba18715d98/fybot%2Fcore%2Fchart.py)
