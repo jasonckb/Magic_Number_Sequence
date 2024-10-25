@@ -196,7 +196,11 @@ def calculate_td_sequential(df):
     
     # Initialize recycle tracking variables
     potential_recycle_start = -1
-    recycle_countdown_type = None  # 'buy' or 'sell'
+    recycle_countdown_type = None
+    
+    # Add deferred state tracking
+    buy_countdown_deferred = False
+    sell_countdown_deferred = False
     
     # Initialize counters and flags
     buy_countdown_bars = []
@@ -212,11 +216,8 @@ def calculate_td_sequential(df):
     bar8_close_sell = None
     
     def check_recycle_completion(current_idx, start_idx, setup_values):
-        """Check if a recycle condition has completed within 18 bars"""
         if start_idx < 0 or current_idx - start_idx > 18:
             return False
-        
-        # Find the maximum setup value in the range
         max_setup = max(setup_values[start_idx:current_idx + 1])
         return max_setup == 9
     
@@ -229,6 +230,7 @@ def calculate_td_sequential(df):
             waiting_for_buy_13 = False
             potential_recycle_start = -1
             recycle_countdown_type = None
+            buy_countdown_deferred = False
             
         if sell_countdown_active and tdst.check_support_violation(df['Close'].iloc[i]):
             sell_countdown_active = False
@@ -237,6 +239,7 @@ def calculate_td_sequential(df):
             waiting_for_sell_13 = False
             potential_recycle_start = -1
             recycle_countdown_type = None
+            sell_countdown_deferred = False
         
         # Check for potential recycle starts
         if buy_countdown_active and check_sell_flip(df, i):
@@ -250,36 +253,33 @@ def calculate_td_sequential(df):
         if potential_recycle_start >= 0:
             if (recycle_countdown_type == 'buy' and 
                 check_recycle_completion(i, potential_recycle_start, sell_setup)):
-                # Cancel buy countdown
                 buy_countdown_active = False
                 buy_setup_count = 0
                 buy_countdown_bars = []
                 waiting_for_buy_13 = False
                 potential_recycle_start = -1
                 recycle_countdown_type = None
-                # Clear countdown numbers from the recycle start
+                buy_countdown_deferred = False
                 buy_countdown[potential_recycle_start:i+1] = 0
                 buy_deferred[potential_recycle_start:i+1] = False
                 
             elif (recycle_countdown_type == 'sell' and 
                   check_recycle_completion(i, potential_recycle_start, buy_setup)):
-                # Cancel sell countdown
                 sell_countdown_active = False
                 sell_setup_count = 0
                 sell_countdown_bars = []
                 waiting_for_sell_13 = False
                 potential_recycle_start = -1
                 recycle_countdown_type = None
-                # Clear countdown numbers from the recycle start
+                sell_countdown_deferred = False
                 sell_countdown[potential_recycle_start:i+1] = 0
                 sell_deferred[potential_recycle_start:i+1] = False
                 
-            # Reset recycle tracking if beyond 18 bars
             elif i - potential_recycle_start > 18:
                 potential_recycle_start = -1
                 recycle_countdown_type = None
         
-        # Setup flips - modified to check for active countdown phases
+        # Setup flips
         if check_buy_flip(df, i) and not sell_countdown_active:
             buy_setup_active = True
             sell_setup_active = False
@@ -291,7 +291,7 @@ def calculate_td_sequential(df):
             setup_start_idx = i
             sell_setup[i] = 1
         
-        # Buy setup phase - only if sell countdown is not active
+        # Buy setup phase
         if buy_setup_active and not sell_countdown_active:
             if check_buy_setup(df, i):
                 if i > 0 and buy_setup[i-1] > 0:
@@ -311,7 +311,7 @@ def calculate_td_sequential(df):
             else:
                 buy_setup_active = False
         
-        # Sell setup phase - only if buy countdown is not active
+        # Sell setup phase
         if sell_setup_active and not buy_countdown_active:
             if check_sell_setup(df, i):
                 if i > 0 and sell_setup[i-1] > 0:
@@ -331,7 +331,7 @@ def calculate_td_sequential(df):
             else:
                 sell_setup_active = False
         
-        # Buy countdown phase - only if sell countdown is not active
+        # Buy countdown phase
         if not sell_countdown_active:
             if buy_setup_complete and not buy_countdown_active and not need_new_buy_setup:
                 if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
@@ -341,27 +341,31 @@ def calculate_td_sequential(df):
                     buy_setup_count = 1
                     buy_countdown_bars = [i]
                     waiting_for_buy_13 = False
+                    buy_countdown_deferred = False
                     
             elif buy_countdown_active:
                 if waiting_for_buy_13:
                     if safe_compare(df['Low'].iloc[i], bar8_close_buy, '<='):
-                        buy_countdown[i] = 13
-                        buy_countdown_active = False
-                        waiting_for_buy_13 = False
-                        buy_countdown_bars = []
-                        need_new_buy_setup = True
-                        potential_recycle_start = -1
-                        recycle_countdown_type = None
+                        if not buy_countdown_deferred:  # Only print 13 if not in deferred state
+                            buy_countdown[i] = 13
+                            buy_countdown_active = False
+                            waiting_for_buy_13 = False
+                            buy_countdown_bars = []
+                            need_new_buy_setup = True
+                            potential_recycle_start = -1
+                            recycle_countdown_type = None
                     elif safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
-                        buy_countdown[i] = 12
-                        buy_deferred[i] = True
-                    else:
-                        buy_countdown[i] = 12
+                        if buy_countdown_deferred:
+                            buy_deferred[i] = True  # Keep printing '+'
+                        else:
+                            buy_countdown_deferred = True  # First time hitting deferred state
+                            buy_deferred[i] = True
+                            buy_countdown[i] = 0  # Clear the countdown number
                 else:
                     if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
                         buy_countdown_bars.append(i)
                         
-                        if buy_setup_count < 12:
+                        if not buy_countdown_deferred and buy_setup_count < 12:
                             buy_setup_count += 1
                             buy_countdown[i] = buy_setup_count
                             if buy_setup_count == 12:
@@ -370,7 +374,7 @@ def calculate_td_sequential(df):
                                     bar8_close_buy = float(df['Close'].iloc[bar8_idx])
                                     waiting_for_buy_13 = True
         
-        # Sell countdown phase - only if buy countdown is not active
+        # Sell countdown phase
         if not buy_countdown_active:
             if sell_setup_complete and not sell_countdown_active and not need_new_sell_setup:
                 if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
@@ -380,27 +384,31 @@ def calculate_td_sequential(df):
                     sell_setup_count = 1
                     sell_countdown_bars = [i]
                     waiting_for_sell_13 = False
+                    sell_countdown_deferred = False
                     
             elif sell_countdown_active:
                 if waiting_for_sell_13:
                     if safe_compare(df['High'].iloc[i], bar8_close_sell, '>='):
-                        sell_countdown[i] = 13
-                        sell_countdown_active = False
-                        waiting_for_sell_13 = False
-                        sell_countdown_bars = []
-                        need_new_sell_setup = True
-                        potential_recycle_start = -1
-                        recycle_countdown_type = None
+                        if not sell_countdown_deferred:  # Only print 13 if not in deferred state
+                            sell_countdown[i] = 13
+                            sell_countdown_active = False
+                            waiting_for_sell_13 = False
+                            sell_countdown_bars = []
+                            need_new_sell_setup = True
+                            potential_recycle_start = -1
+                            recycle_countdown_type = None
                     elif safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
-                        sell_countdown[i] = 12
-                        sell_deferred[i] = True
-                    else:
-                        sell_countdown[i] = 12
+                        if sell_countdown_deferred:
+                            sell_deferred[i] = True  # Keep printing '+'
+                        else:
+                            sell_countdown_deferred = True  # First time hitting deferred state
+                            sell_deferred[i] = True
+                            sell_countdown[i] = 0  # Clear the countdown number
                 else:
                     if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
                         sell_countdown_bars.append(i)
                         
-                        if sell_setup_count < 12:
+                        if not sell_countdown_deferred and sell_setup_count < 12:
                             sell_setup_count += 1
                             sell_countdown[i] = sell_setup_count
                             if sell_setup_count == 12:
