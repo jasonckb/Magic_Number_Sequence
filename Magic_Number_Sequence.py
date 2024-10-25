@@ -316,10 +316,10 @@ def calculate_td_sequential(df):
                 setup_one_at_current_bar = True
         
         # Buy setup phase
-        if buy_setup_active and not sell_countdown_active:
+        if buy_setup_active:
             if check_buy_setup(df, i):
                 if i > 0 and buy_setup[i-1] > 0:
-                    current_count = buy_setup[i-1] + 1
+                    current_count = buy_setup[i-1] + 1  # Must be consecutive
                     if current_count <= 9:
                         buy_setup[i] = current_count
                         if current_count == 9:
@@ -333,13 +333,15 @@ def calculate_td_sequential(df):
                 else:
                     buy_setup[i] = 1
             else:
+                # Cancel the whole setup if sequence breaks
                 buy_setup_active = False
+                buy_setup[setup_start_idx:i+1] = 0  # Clear any partial setup numbers
         
         # Sell setup phase
-        if sell_setup_active and not buy_countdown_active:
+        if sell_setup_active:
             if check_sell_setup(df, i):
                 if i > 0 and sell_setup[i-1] > 0:
-                    current_count = sell_setup[i-1] + 1
+                    current_count = sell_setup[i-1] + 1  # Must be consecutive
                     if current_count <= 9:
                         sell_setup[i] = current_count
                         if current_count == 9:
@@ -353,7 +355,9 @@ def calculate_td_sequential(df):
                 else:
                     sell_setup[i] = 1
             else:
+                # Cancel the whole setup if sequence breaks
                 sell_setup_active = False
+                sell_setup[setup_start_idx:i+1] = 0  # Clear any partial setup numbers
         
         # Buy countdown phase
         if not sell_countdown_active:
