@@ -502,7 +502,7 @@ def create_td_sequential_chart(df, ticker):
     
     return fig
 
-defdef main():
+def main():
     try:
         # Get formatted ticker
         formatted_ticker = check_ticker_format(ticker_input)
