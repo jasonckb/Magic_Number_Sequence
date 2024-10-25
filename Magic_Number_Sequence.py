@@ -354,9 +354,9 @@ def calculate_td_sequential(df):
                     
             elif buy_countdown_active:
                 if waiting_for_buy_13:
+                    # Check bar 8 rule using existing bar8_close_buy
                     if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
-                        # Check if bar 8 rule is met
-                        if check_bar8_rule(df, i, bar8_idx, True):
+                        if safe_compare(df['Low'].iloc[i], bar8_close_buy, '<='):
                             # Bar 8 rule is met - print 13 and end countdown
                             buy_countdown[i] = 13
                             buy_countdown_active = False
@@ -367,7 +367,7 @@ def calculate_td_sequential(df):
                             recycle_countdown_type = None
                             buy_countdown_deferred = False
                         else:
-                            # Bar 8 rule not met - print + and continue checking
+                            # Bar 8 rule not met - print + and continue
                             buy_deferred[i] = True
                             buy_countdown[i] = 0
                             buy_countdown_deferred = True
@@ -398,9 +398,9 @@ def calculate_td_sequential(df):
                     
             elif sell_countdown_active:
                 if waiting_for_sell_13:
+                    # Check bar 8 rule using existing bar8_close_sell
                     if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
-                        # Check if bar 8 rule is met
-                        if check_bar8_rule(df, i, bar8_idx, False):
+                        if safe_compare(df['High'].iloc[i], bar8_close_sell, '>='):
                             # Bar 8 rule is met - print 13 and end countdown
                             sell_countdown[i] = 13
                             sell_countdown_active = False
@@ -411,7 +411,7 @@ def calculate_td_sequential(df):
                             recycle_countdown_type = None
                             sell_countdown_deferred = False
                         else:
-                            # Bar 8 rule not met - print + and continue checking
+                            # Bar 8 rule not met - print + and continue
                             sell_deferred[i] = True
                             sell_countdown[i] = 0
                             sell_countdown_deferred = True
