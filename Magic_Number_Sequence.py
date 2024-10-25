@@ -194,6 +194,10 @@ def calculate_td_sequential(df):
     sell_setup_complete = False
     setup_start_idx = 0
     
+    # Initialize recycle tracking variables
+    potential_recycle_start = -1
+    recycle_countdown_type = None  # 'buy' or 'sell'
+    
     # Initialize counters and flags
     buy_countdown_bars = []
     sell_countdown_bars = []
@@ -207,6 +211,15 @@ def calculate_td_sequential(df):
     bar8_close_buy = None
     bar8_close_sell = None
     
+    def check_recycle_completion(current_idx, start_idx, setup_values):
+        """Check if a recycle condition has completed within 18 bars"""
+        if start_idx < 0 or current_idx - start_idx > 18:
+            return False
+        
+        # Find the maximum setup value in the range
+        max_setup = max(setup_values[start_idx:current_idx + 1])
+        return max_setup == 9
+    
     for i in range(len(df)):
         # Check TDST violations
         if buy_countdown_active and tdst.check_resistance_violation(df['Close'].iloc[i]):
@@ -214,20 +227,65 @@ def calculate_td_sequential(df):
             buy_setup_count = 0
             buy_countdown_bars = []
             waiting_for_buy_13 = False
+            potential_recycle_start = -1
+            recycle_countdown_type = None
             
         if sell_countdown_active and tdst.check_support_violation(df['Close'].iloc[i]):
             sell_countdown_active = False
             sell_setup_count = 0
             sell_countdown_bars = []
             waiting_for_sell_13 = False
+            potential_recycle_start = -1
+            recycle_countdown_type = None
+        
+        # Check for potential recycle starts
+        if buy_countdown_active and check_sell_flip(df, i):
+            potential_recycle_start = i
+            recycle_countdown_type = 'buy'
+        elif sell_countdown_active and check_buy_flip(df, i):
+            potential_recycle_start = i
+            recycle_countdown_type = 'sell'
+            
+        # Check for recycle completion
+        if potential_recycle_start >= 0:
+            if (recycle_countdown_type == 'buy' and 
+                check_recycle_completion(i, potential_recycle_start, sell_setup)):
+                # Cancel buy countdown
+                buy_countdown_active = False
+                buy_setup_count = 0
+                buy_countdown_bars = []
+                waiting_for_buy_13 = False
+                potential_recycle_start = -1
+                recycle_countdown_type = None
+                # Clear countdown numbers from the recycle start
+                buy_countdown[potential_recycle_start:i+1] = 0
+                buy_deferred[potential_recycle_start:i+1] = False
+                
+            elif (recycle_countdown_type == 'sell' and 
+                  check_recycle_completion(i, potential_recycle_start, buy_setup)):
+                # Cancel sell countdown
+                sell_countdown_active = False
+                sell_setup_count = 0
+                sell_countdown_bars = []
+                waiting_for_sell_13 = False
+                potential_recycle_start = -1
+                recycle_countdown_type = None
+                # Clear countdown numbers from the recycle start
+                sell_countdown[potential_recycle_start:i+1] = 0
+                sell_deferred[potential_recycle_start:i+1] = False
+                
+            # Reset recycle tracking if beyond 18 bars
+            elif i - potential_recycle_start > 18:
+                potential_recycle_start = -1
+                recycle_countdown_type = None
         
         # Setup flips - modified to check for active countdown phases
-        if check_buy_flip(df, i) and not sell_countdown_active:  # Only allow buy setup if sell countdown is not active
+        if check_buy_flip(df, i) and not sell_countdown_active:
             buy_setup_active = True
             sell_setup_active = False
             setup_start_idx = i
             buy_setup[i] = 1
-        elif check_sell_flip(df, i) and not buy_countdown_active:  # Only allow sell setup if buy countdown is not active
+        elif check_sell_flip(df, i) and not buy_countdown_active:
             sell_setup_active = True
             buy_setup_active = False
             setup_start_idx = i
@@ -292,6 +350,8 @@ def calculate_td_sequential(df):
                         waiting_for_buy_13 = False
                         buy_countdown_bars = []
                         need_new_buy_setup = True
+                        potential_recycle_start = -1
+                        recycle_countdown_type = None
                     elif safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
                         buy_countdown[i] = 12
                         buy_deferred[i] = True
@@ -329,6 +389,8 @@ def calculate_td_sequential(df):
                         waiting_for_sell_13 = False
                         sell_countdown_bars = []
                         need_new_sell_setup = True
+                        potential_recycle_start = -1
+                        recycle_countdown_type = None
                     elif safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
                         sell_countdown[i] = 12
                         sell_deferred[i] = True
