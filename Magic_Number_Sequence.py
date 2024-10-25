@@ -363,6 +363,7 @@ def calculate_td_sequential(df):
                     buy_setup_count = 1
                     buy_countdown_bars = [i]
                     waiting_for_buy_13 = False
+                    bar8_close_buy = None  # Reset bar 8 reference
                     
             elif buy_countdown_active:
                 if waiting_for_buy_13:
@@ -384,13 +385,12 @@ def calculate_td_sequential(df):
                         if buy_setup_count < 12:
                             buy_setup_count += 1
                             buy_countdown[i] = buy_setup_count
-                            if buy_setup_count == 12:
-                                # CHANGED: Bar 8 calculation
-                                if len(buy_countdown_bars) >= 8:
-                                    bar8_idx = buy_countdown_bars[len(buy_countdown_bars)-8]  # Count backwards 8 bars
-                                    bar8_close_buy = float(df['Close'].iloc[bar8_idx])
-                                    waiting_for_buy_13 = True
-        
+                            # CHANGED: Store bar 8 when count reaches 8
+                            if buy_setup_count == 8:
+                                bar8_close_buy = float(df['Close'].iloc[i])
+                            elif buy_setup_count == 12:
+                                waiting_for_buy_13 = True
+
         # Sell countdown phase
         if not buy_countdown_active:
             if sell_setup_complete and not sell_countdown_active and not need_new_sell_setup:
@@ -401,6 +401,7 @@ def calculate_td_sequential(df):
                     sell_setup_count = 1
                     sell_countdown_bars = [i]
                     waiting_for_sell_13 = False
+                    bar8_close_sell = None  # Reset bar 8 reference
                     
             elif sell_countdown_active:
                 if waiting_for_sell_13:
@@ -422,12 +423,11 @@ def calculate_td_sequential(df):
                         if sell_setup_count < 12:
                             sell_setup_count += 1
                             sell_countdown[i] = sell_setup_count
-                            if sell_setup_count == 12:
-                                # CHANGED: Bar 8 calculation
-                                if len(sell_countdown_bars) >= 8:
-                                    bar8_idx = sell_countdown_bars[len(sell_countdown_bars)-8]  # Count backwards 8 bars
-                                    bar8_close_sell = float(df['Close'].iloc[bar8_idx])
-                                    waiting_for_sell_13 = True
+                            # CHANGED: Store bar 8 when count reaches 8
+                            if sell_setup_count == 8:
+                                bar8_close_sell = float(df['Close'].iloc[i])
+                            elif sell_setup_count == 12:
+                                waiting_for_sell_13 = True
     
     return buy_setup, sell_setup, buy_countdown, sell_countdown, buy_perfection, sell_perfection, buy_deferred, sell_deferred, tdst
 
