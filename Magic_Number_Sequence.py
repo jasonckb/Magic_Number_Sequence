@@ -8,7 +8,7 @@ import numpy as np
 st.set_page_config(layout="wide")
 
 # Sidebar for input
-ticker_inputo = st.sidebar.text_input("Enter ticker", "AAPL")
+ticker_input = st.sidebar.text_input("Enter ticker", "AAPL")
 
 # Function to check if the ticker is formatted correctly
 def check_ticker_format(ticker):
