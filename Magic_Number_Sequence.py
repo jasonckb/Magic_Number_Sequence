@@ -23,6 +23,9 @@ st.title("Magic Number Sequence by Jason Chan")
 
 # Function to create TD Sequential Chart
 def create_td_sequential_chart(df, start_date, end_date):
+    if df.empty:
+        st.write("No data available for the selected ticker.")
+        return
     fig = go.Figure(data=[go.Candlestick(
         x=df.index,
         open=df['Open'],
