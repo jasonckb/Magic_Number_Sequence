@@ -9,17 +9,23 @@ st.set_page_config(layout="wide")
 # Sidebar for input
 ticker_input = st.sidebar.text_input("Enter ticker", "AAPL")
 
-# Format ticker for HK stocks
-if ticker_input.isdigit():
-    ticker_input = ticker_input.zfill(4) + ".HK"
+# Function to check if the ticker is formatted correctly
+def check_ticker_format(ticker):
+    if ticker.isdigit():
+        return ticker.zfill(4) + ".HK"
+    return ticker
+
+# Format the ticker input
+formatted_ticker = check_ticker_format(ticker_input)
+st.write("Formatted Ticker: ", formatted_ticker)
 
 # Download 1 year of data
 end_date = pd.Timestamp.today()
 start_date = end_date - pd.DateOffset(years=1)
-data = yf.download(ticker_input, start=start_date, end=end_date)
+data = yf.download(formatted_ticker, start=start_date, end=end_date)
 
 # Title and layout
-st.title("Candlestick Chart for " + ticker_input)
+st.title("Candlestick Chart for " + formatted_ticker)
 
 # Function to create TD Sequential Chart
 def create_td_sequential_chart(df):
