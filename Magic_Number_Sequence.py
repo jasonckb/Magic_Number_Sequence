@@ -13,7 +13,24 @@ ticker_input = st.sidebar.text_input("Enter ticker", "AAPL")
 def check_ticker_format(ticker):
     if ticker.isdigit():
         return ticker.zfill(4) + ".HK"
-    return ticker.upper()  # Added upper() to standardize ticker format
+    return ticker.upper()
+
+# Function to clean Yahoo Finance data
+def clean_yahoo_data(df):
+    # Convert index to datetime if not already
+    df.index = pd.to_datetime(df.index)
+    
+    # Remove any row where any of OHLC values are not numeric
+    numeric_df = df[pd.to_numeric(df['Open'], errors='coerce').notnull() &
+                   pd.to_numeric(df['High'], errors='coerce').notnull() &
+                   pd.to_numeric(df['Low'], errors='coerce').notnull() &
+                   pd.to_numeric(df['Close'], errors='coerce').notnull()]
+    
+    # Convert OHLC columns to numeric
+    for col in ['Open', 'High', 'Low', 'Close']:
+        numeric_df[col] = pd.to_numeric(numeric_df[col], errors='coerce')
+    
+    return numeric_df
 
 # Format the ticker input
 formatted_ticker = check_ticker_format(ticker_input)
@@ -24,6 +41,9 @@ try:
     end_date = pd.Timestamp.today()
     start_date = end_date - pd.DateOffset(years=1)
     data = yf.download(formatted_ticker, start=start_date, end=end_date, progress=False)
+    
+    # Clean the data
+    data = clean_yahoo_data(data)
     
     # Check if data is empty
     if data.empty:
@@ -56,7 +76,7 @@ try:
                 xaxis_title='Date',
                 yaxis_title='Price',
                 template='plotly_white',
-                xaxis_rangeslider_visible=False  # Removes the range slider
+                xaxis_rangeslider_visible=False
             )
             
             # Display the chart
