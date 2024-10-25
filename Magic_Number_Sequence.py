@@ -502,61 +502,65 @@ def create_td_sequential_chart(df, ticker):
     
     return fig
 
-def main():
+defdef main():
     try:
         # Get formatted ticker
         formatted_ticker = check_ticker_format(ticker_input)
         st.write("Formatted Ticker: ", formatted_ticker)
         
-        # Add download status
-        with st.status("Downloading data...") as status:
-            # Download data
-            end_date = pd.Timestamp.today()
-            start_date = end_date - pd.DateOffset(years=1)
-            
-            try:
-                data = yf.download(formatted_ticker, start=start_date, end=end_date, progress=False)
-                if data.empty:
-                    st.error(f"No data available for {formatted_ticker}. This could mean:")
-                    st.write("- The ticker symbol might be incorrect")
-                    st.write("- The stock might not be listed or actively trading")
-                    st.write("- There might be an issue with the data provider")
-                    return
-                status.update(label="Data downloaded successfully", state="complete")
-            except Exception as e:
-                st.error(f"Error downloading data: {str(e)}")
+        # Download data
+        end_date = pd.Timestamp.today()
+        start_date = end_date - pd.DateOffset(years=1)
+        
+        st.write("Downloading data...")
+        try:
+            data = yf.download(formatted_ticker, start=start_date, end=end_date, progress=False)
+            if data.empty:
+                st.error(f"No data available for {formatted_ticker}. This could mean:")
+                st.write("- The ticker symbol might be incorrect")
+                st.write("- The stock might not be listed or actively trading")
+                st.write("- There might be an issue with the data provider")
                 return
+            st.success("Data downloaded successfully")
+        except Exception as e:
+            st.error(f"Error downloading data: {str(e)}")
+            return
+        
+        # Clean and verify data
+        st.write("Cleaning data...")
+        data = clean_yahoo_data(data)
+        if data.empty:
+            st.error("Data cleaning failed")
+            return
+        st.success("Data cleaned successfully")
+        
+        if len(data) > 0:
+            # Display data information
+            st.subheader("Data Information")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Total Rows", len(data))
+                st.metric("Start Date", data.index[0].strftime('%Y-%m-%d'))
+            with col2:
+                st.metric("End Date", data.index[-1].strftime('%Y-%m-%d'))
+                st.metric("Price Range", f"${data['Low'].min():.2f} - ${data['High'].max():.2f}")
             
-            # Clean and verify data
-            with st.status("Cleaning data...") as clean_status:
-                data = clean_yahoo_data(data)
-                if not data.empty:
-                    clean_status.update(label="Data cleaned successfully", state="complete")
-                else:
-                    clean_status.update(label="Data cleaning failed", state="error")
-                    return
+            # Show sample data in an expander
+            with st.expander("View Sample Data"):
+                st.dataframe(data.head())
             
-            if len(data) > 0:
-                # Add data info expander
-                with st.expander("Data Information"):
-                    st.write(f"Total rows: {len(data)}")
-                    st.write(f"Date range: {data.index[0].strftime('%Y-%m-%d')} to {data.index[-1].strftime('%Y-%m-%d')}")
-                    st.write(f"Price range: ${data['Low'].min():.2f} to ${data['High'].max():.2f}")
-                    st.write("Sample of the data:")
-                    st.dataframe(data.head())
-                
-                # Create and display chart
-                with st.status("Creating chart...") as chart_status:
-                    fig = create_td_sequential_chart(data, formatted_ticker)
-                    if fig is not None:
-                        st.plotly_chart(fig, use_container_width=True)
-                        chart_status.update(label="Chart created successfully", state="complete")
-                    else:
-                        chart_status.update(label="Chart creation failed", state="error")
-                
+            # Create and display chart
+            st.write("Creating chart...")
+            fig = create_td_sequential_chart(data, formatted_ticker)
+            if fig is not None:
+                st.plotly_chart(fig, use_container_width=True)
+                st.success("Chart created successfully")
             else:
-                st.error("Unable to process the data. Please check the ticker symbol and try again.")
-                
+                st.error("Chart creation failed")
+        
+        else:
+            st.error("Unable to process the data. Please check the ticker symbol and try again.")
+            
     except Exception as e:
         st.error("An unexpected error occurred")
         st.exception(e)
