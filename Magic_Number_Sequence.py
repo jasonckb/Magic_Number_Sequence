@@ -99,7 +99,7 @@ try:
         st.dataframe(data.tail())
 
 except Exception as e:
-    st.error(f"Error occurred: {str(e)
+    st.error(f"Error occurred: {str(e)}")
 
 def clean_yahoo_data(df):
     try:
