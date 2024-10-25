@@ -53,8 +53,7 @@ def plot_stock_chart(data, ticker):
         rangebreaks=[
             dict(bounds=["sat", "mon"]),  # Hide weekends
             dict(values=["2023-12-25", "2024-01-01"])  # Example: hide specific holidays
-        ],
-        range=[first_date, annotation_x]  # Extend x-axis range for annotations
+        ]
     )
 
     return fig
