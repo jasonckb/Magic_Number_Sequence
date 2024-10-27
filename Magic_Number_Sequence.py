@@ -191,6 +191,24 @@ def check_recycle_completion(current_idx, start_idx, setup_values):
     max_setup = max(setup_values[start_idx:current_idx + 1])
     return max_setup == 9
 
+def check_18_bar_rule(df, current_idx, last_flip_idx, is_buy_countdown):
+    """
+    Helper function to check 18-bar rule:
+    - For buy countdown: checks if no buy flip in last 18 bars after sell flip
+    - For sell countdown: checks if no sell flip in last 18 bars after buy flip
+    Returns True if countdown should be cancelled
+    """
+    if last_flip_idx < 0 or current_idx - last_flip_idx < 18:
+        return False
+        
+    # Check if no same-direction flip in last 18 bars
+    for i in range(last_flip_idx, current_idx + 1):
+        if is_buy_countdown and check_buy_flip(df, i):
+            return False
+        elif not is_buy_countdown and check_sell_flip(df, i):
+            return False
+    return True
+
 def calculate_td_sequential(df):
     # Initialize arrays
     buy_setup = np.zeros(len(df))
@@ -233,6 +251,28 @@ def calculate_td_sequential(df):
     bar8_close_sell = None
     
     for i in range(len(df)):
+        # Track opposite price flips for 18-bar rule
+        if check_buy_flip(df, i) and sell_countdown_active:
+            last_opposite_flip['sell'] = i
+        if check_sell_flip(df, i) and buy_countdown_active:
+            last_opposite_flip['buy'] = i
+            
+        # Check 18-bar rule
+        if buy_countdown_active and check_18_bar_rule(df, i, last_opposite_flip['buy'], True):
+            buy_countdown_active = False
+            buy_setup_count = 0
+            buy_countdown_bars = []
+            waiting_for_buy_13 = False
+            bar8_close_buy = None
+            buy_plus_without_setup = False
+            
+        if sell_countdown_active and check_18_bar_rule(df, i, last_opposite_flip['sell'], False):
+            sell_countdown_active = False
+            sell_setup_count = 0
+            sell_countdown_bars = []
+            waiting_for_sell_13 = False
+            bar8_close_sell = None
+            sell_plus_without_setup = False
         # Check TDST violations
         if buy_countdown_active and tdst.check_resistance_violation(df['Close'].iloc[i]):
             buy_countdown_active = False
