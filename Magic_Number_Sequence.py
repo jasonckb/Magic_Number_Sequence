@@ -82,38 +82,14 @@ def check_sell_flip(df, i):
            safe_compare(df['Close'].iloc[i-1], df['Close'].iloc[i-5], '<')
 
 def check_buy_setup(df, i):
-    """
-    More robust check for buy setup:
-    - Must have lower close than 4 bars ago
-    - Must maintain consecutive lower closes from setup start
-    """
     if i < 4:
         return False
-    # Check current bar against 4 bars ago
-    if not safe_compare(df['Close'].iloc[i], df['Close'].iloc[i-4], '<'):
-        return False
-    # Check consecutive condition
-    for j in range(max(0, i-3), i+1):
-        if not safe_compare(df['Close'].iloc[j], df['Close'].iloc[j-4], '<'):
-            return False
-    return True
+    return safe_compare(df['Close'].iloc[i], df['Close'].iloc[i-4], '<')
 
 def check_sell_setup(df, i):
-    """
-    More robust check for sell setup:
-    - Must have higher close than 4 bars ago
-    - Must maintain consecutive higher closes from setup start
-    """
     if i < 4:
         return False
-    # Check current bar against 4 bars ago
-    if not safe_compare(df['Close'].iloc[i], df['Close'].iloc[i-4], '>'):
-        return False
-    # Check consecutive condition
-    for j in range(max(0, i-3), i+1):
-        if not safe_compare(df['Close'].iloc[j], df['Close'].iloc[j-4], '>'):
-            return False
-    return True
+    return safe_compare(df['Close'].iloc[i], df['Close'].iloc[i-4], '>')
 
 def check_buy_perfection(df, setup_start, i):
     if i - setup_start < 8:
@@ -309,11 +285,9 @@ def calculate_td_sequential(df):
             else:
                 # Clear interrupted setup
                 buy_setup_active = False
-                # Clear all setup counts from start to current if interrupted
+                # Only clear if we've had 4 bars without continuation
                 if i - setup_start_idx >= 4:
-                    for j in range(setup_start_idx, i+1):
-                        if buy_setup[j] > 0:
-                            buy_setup[j] = 0
+                    buy_setup[setup_start_idx:i+1] = 0
         
         # Sell Setup Phase
         if check_sell_flip(df, i):
@@ -348,12 +322,9 @@ def calculate_td_sequential(df):
             else:
                 # Clear interrupted setup
                 sell_setup_active = False
-                # Clear all setup counts from start to current if interrupted
+                # Only clear if we've had 4 bars without continuation
                 if i - setup_start_idx >= 4:
-                    for j in range(setup_start_idx, i+1):
-                        if sell_setup[j] > 0:
-                            sell_setup[j] = 0
-        
+                    sell_setup[setup_start_idx:i+1] = 0
         
         # Buy Countdown Phase - Only if no sell countdown active
         if not sell_countdown_active:
