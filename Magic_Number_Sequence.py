@@ -40,40 +40,6 @@ def clean_yahoo_data(df):
         st.error(f"Error in data cleaning: {str(e)}")
         return pd.DataFrame()
 
-        # Make a copy of the DataFrame to avoid modifying the original
-        df_cleaned = df.copy()
-        
-        # Convert each OHLC column to numeric individually
-        for col in required_columns:
-            try:
-                df_cleaned[col] = pd.to_numeric(df_cleaned[col], errors='coerce')
-            except Exception as e:
-                st.error(f"Error converting {col} column to numeric: {str(e)}")
-                return pd.DataFrame()
-        
-        # Drop rows where any OHLC value is NaN
-        df_cleaned = df_cleaned.dropna(subset=required_columns)
-        
-        # Check if we have any data left after cleaning
-        if len(df_cleaned) == 0:
-            st.error("No valid OHLC data remains after cleaning")
-            return pd.DataFrame()
-        
-        # Preserve the datetime index
-        df_cleaned.index = pd.to_datetime(df.index)
-        
-        # Debug information
-        st.write(f"Original shape: {df.shape}")
-        st.write(f"Cleaned shape: {df_cleaned.shape}")
-        
-        return df_cleaned
-        
-    except Exception as e:
-        st.error(f"Error in data cleaning: {str(e)}")
-        st.write("DataFrame info:")
-        st.write(df.info())
-        return pd.DataFrame()
-
 # Comparison Helper Functions
 def safe_compare(a, b, operator='<='):
     try:
@@ -173,23 +139,13 @@ class TDSTLevels:
         if self.active_support is not None:
             return safe_compare(price, self.active_support, '<')
         return False
-        
+
 def check_bar8_rule(df, current_idx, bar8_idx, is_buy_countdown):
-    """
-    Helper function to check if bar 8 rule is met
-    """
+    """Helper function to check if bar 8 rule is met"""
     if is_buy_countdown:
         return safe_compare(df['Low'].iloc[current_idx], df['Close'].iloc[bar8_idx], '<=')
     else:
         return safe_compare(df['High'].iloc[current_idx], df['Close'].iloc[bar8_idx], '>=')
-        
-def check_recycle_completion(current_idx, start_idx, setup_values):
-    """Check if a recycle condition has completed within 18 bars"""
-    if start_idx < 0 or current_idx - start_idx > 18:
-        return False
-    # Find the maximum setup value in the range
-    max_setup = max(setup_values[start_idx:current_idx + 1])
-    return max_setup == 9
 
 def check_18_bar_rule(df, current_idx, last_flip_idx, is_buy_countdown):
     """
@@ -359,7 +315,7 @@ def calculate_td_sequential(df):
                     
             elif buy_countdown_active:
                 if waiting_for_buy_13:
-                    # If bar 8 rule is met, mark 13 without checking 2-bar rule
+                    # For bar 13, only check bar 8 rule
                     if safe_compare(df['Low'].iloc[i], bar8_close_buy, '<='):
                         buy_countdown[i] = 13
                         buy_countdown_active = False
@@ -398,7 +354,7 @@ def calculate_td_sequential(df):
                     
             elif sell_countdown_active:
                 if waiting_for_sell_13:
-                    # If bar 8 rule is met, mark 13 without checking 2-bar rule
+                    # For bar 13, only check bar 8 rule
                     if safe_compare(df['High'].iloc[i], bar8_close_sell, '>='):
                         sell_countdown[i] = 13
                         sell_countdown_active = False
@@ -631,5 +587,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
