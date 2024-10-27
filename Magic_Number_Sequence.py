@@ -210,8 +210,6 @@ def calculate_td_sequential(df):
     buy_setup_complete = False
     sell_setup_complete = False
     setup_start_idx = 0
-    last_buy_setup_idx = -1
-    last_sell_setup_idx = -1
     
     # Initialize tracking variables
     potential_recycle_start = -1
@@ -229,19 +227,6 @@ def calculate_td_sequential(df):
     waiting_for_sell_13 = False
     bar8_close_buy = None
     bar8_close_sell = None
-    
-    # Add 18-bar rule flags
-    opposite_flip_counter = 0
-    opposite_flip_active = False
-    last_opposite_flip_idx = -1
-
-    def clear_buy_setup(start_idx, end_idx):
-        buy_setup[start_idx:end_idx+1] = 0
-        return False, -1  # Returns updated active flag and start_idx
-
-    def clear_sell_setup(start_idx, end_idx):
-        sell_setup[start_idx:end_idx+1] = 0
-        return False, -1  # Returns updated active flag and start_idx
 
     for i in range(len(df)):
         # TDST violation checks
@@ -264,156 +249,71 @@ def calculate_td_sequential(df):
             potential_recycle_start = -1
             recycle_countdown_type = None
             sell_plus_without_setup = False
-        
-        # Recycle checks
-        if buy_countdown_active and check_sell_flip(df, i):
-            potential_recycle_start = i
-            recycle_countdown_type = 'buy'
-        elif sell_countdown_active and check_buy_flip(df, i):
-            potential_recycle_start = i
-            recycle_countdown_type = 'sell'
-            
-        if potential_recycle_start >= 0:
-            if (recycle_countdown_type == 'buy' and 
-                check_recycle_completion(i, potential_recycle_start, sell_setup)):
-                buy_countdown_active = False
-                buy_setup_count = 0
-                buy_countdown_bars = []
-                waiting_for_buy_13 = False
-                bar8_close_buy = None
-                potential_recycle_start = -1
-                recycle_countdown_type = None
-                buy_plus_without_setup = False
-                buy_countdown[potential_recycle_start:i+1] = 0
-                buy_deferred[potential_recycle_start:i+1] = False
-                
-            elif (recycle_countdown_type == 'sell' and 
-                  check_recycle_completion(i, potential_recycle_start, buy_setup)):
-                sell_countdown_active = False
-                sell_setup_count = 0
-                sell_countdown_bars = []
-                waiting_for_sell_13 = False
-                bar8_close_sell = None
-                potential_recycle_start = -1
-                recycle_countdown_type = None
-                sell_plus_without_setup = False
-                sell_countdown[potential_recycle_start:i+1] = 0
-                sell_deferred[potential_recycle_start:i+1] = False
-                
-            elif i - potential_recycle_start > 18:
-                potential_recycle_start = -1
-                recycle_countdown_type = None
-
-        # 18-bar rule checks
-        if buy_countdown_active:
-            if check_sell_flip(df, i):
-                opposite_flip_active = True
-                opposite_flip_counter = 0
-                last_opposite_flip_idx = i
-            elif opposite_flip_active:
-                if check_buy_flip(df, i):
-                    opposite_flip_active = False
-                    opposite_flip_counter = 0
-                else:
-                    opposite_flip_counter += 1
-                    if opposite_flip_counter >= 18:
-                        buy_countdown_active = False
-                        buy_countdown[last_opposite_flip_idx:i+1] = 0
-                        opposite_flip_active = False
-                        opposite_flip_counter = 0
-
-        if sell_countdown_active:
-            if check_buy_flip(df, i):
-                opposite_flip_active = True
-                opposite_flip_counter = 0
-                last_opposite_flip_idx = i
-            elif opposite_flip_active:
-                if check_sell_flip(df, i):
-                    opposite_flip_active = False
-                    opposite_flip_counter = 0
-                else:
-                    opposite_flip_counter += 1
-                    if opposite_flip_counter >= 18:
-                        sell_countdown_active = False
-                        sell_countdown[last_opposite_flip_idx:i+1] = 0
-                        opposite_flip_active = False
-                        opposite_flip_counter = 0
 
         setup_one_at_current_bar = False
         
-        # Modified setup flip detection
+        # Modified setup flips - allow during countdown
         if check_buy_flip(df, i):
-            if i >= 4 and all(check_buy_setup(df, j) for j in range(i-3, i+1)):
-                buy_setup_active = True
-                setup_start_idx = i
-                buy_setup[i] = 1
-                last_buy_setup_idx = i
-                setup_one_at_current_bar = True
+            buy_setup_active = True
+            sell_setup_active = False
+            setup_start_idx = i
+            buy_setup[i] = 1
+            setup_one_at_current_bar = True
+            
+        elif check_sell_flip(df, i):
+            sell_setup_active = True
+            buy_setup_active = False
+            setup_start_idx = i
+            sell_setup[i] = 1
+            setup_one_at_current_bar = True
         
-        if check_sell_flip(df, i):
-            if i >= 4 and all(check_sell_setup(df, j) for j in range(i-3, i+1)):
-                sell_setup_active = True
-                setup_start_idx = i
-                sell_setup[i] = 1
-                last_sell_setup_idx = i
-                setup_one_at_current_bar = True
-
-        # Buy setup phase with enhanced validation
+        # Buy setup phase
         if buy_setup_active:
-            if not check_buy_setup(df, i):
-                buy_setup_active, setup_start_idx = clear_buy_setup(setup_start_idx, i)
-            elif i > 0 and buy_setup[i-1] > 0:
-                if (i - setup_start_idx) == buy_setup[i-1]:
-                    current_count = buy_setup[i-1] + 1
-                    if current_count <= 9:
-                        buy_setup[i] = current_count
-                        if current_count == 9:
-                            if check_buy_perfection(df, setup_start_idx, i):
-                                buy_perfection[i] = 1
-                            buy_setup_active = False
-                            buy_setup_complete = True
-                            need_new_buy_setup = False
+            if check_buy_setup(df, i):
+                if i > 0 and buy_setup[i-1] > 0:
+                    if (i - setup_start_idx) == buy_setup[i-1]:
+                        current_count = buy_setup[i-1] + 1
+                        if current_count <= 9:
+                            buy_setup[i] = current_count
+                            if current_count == 9:
+                                if check_buy_perfection(df, setup_start_idx, i):
+                                    buy_perfection[i] = 1
+                                buy_setup_active = False
+                                buy_setup_complete = True
+                                need_new_buy_setup = False
+                    else:
+                        buy_setup_active = False
+                        buy_setup[setup_start_idx:i+1] = 0
                 else:
-                    buy_setup_active, setup_start_idx = clear_buy_setup(setup_start_idx, i)
-            else:
-                if i - setup_start_idx == 0:  # First bar after flip
                     buy_setup[i] = 1
-                else:
-                    buy_setup_active, setup_start_idx = clear_buy_setup(setup_start_idx, i)
-
-        # Sell setup phase with enhanced validation
-        if sell_setup_active:
-            if not check_sell_setup(df, i):
-                sell_setup_active, setup_start_idx = clear_sell_setup(setup_start_idx, i)
-            elif i > 0 and sell_setup[i-1] > 0:
-                if (i - setup_start_idx) == sell_setup[i-1]:
-                    current_count = sell_setup[i-1] + 1
-                    if current_count <= 9:
-                        sell_setup[i] = current_count
-                        if current_count == 9:
-                            if check_sell_perfection(df, setup_start_idx, i):
-                                sell_perfection[i] = 1
-                            sell_setup_active = False
-                            sell_setup_complete = True
-                            need_new_sell_setup = False
-                else:
-                    sell_setup_active, setup_start_idx = clear_sell_setup(setup_start_idx, i)
             else:
-                if i - setup_start_idx == 0:  # First bar after flip
-                    sell_setup[i] = 1
+                buy_setup_active = False
+                buy_setup[setup_start_idx:i+1] = 0
+        
+        # Sell setup phase
+        if sell_setup_active:
+            if check_sell_setup(df, i):
+                if i > 0 and sell_setup[i-1] > 0:
+                    if (i - setup_start_idx) == sell_setup[i-1]:
+                        current_count = sell_setup[i-1] + 1
+                        if current_count <= 9:
+                            sell_setup[i] = current_count
+                            if current_count == 9:
+                                if check_sell_perfection(df, setup_start_idx, i):
+                                    sell_perfection[i] = 1
+                                sell_setup_active = False
+                                sell_setup_complete = True
+                                need_new_sell_setup = False
+                    else:
+                        sell_setup_active = False
+                        sell_setup[setup_start_idx:i+1] = 0
                 else:
-                    sell_setup_active, setup_start_idx = clear_sell_setup(setup_start_idx, i)
+                    sell_setup[i] = 1
+            else:
+                sell_setup_active = False
+                sell_setup[setup_start_idx:i+1] = 0
 
-        # Check for setup interruption (4-bar rule violation)
-        if buy_setup_active and i - last_buy_setup_idx > 3:
-            if not all(check_buy_setup(df, j) for j in range(i-3, i+1)):
-                buy_setup_active, setup_start_idx = clear_buy_setup(setup_start_idx, i)
-
-        if sell_setup_active and i - last_sell_setup_idx > 3:
-            if not all(check_sell_setup(df, j) for j in range(i-3, i+1)):
-                sell_setup_active, setup_start_idx = clear_sell_setup(setup_start_idx, i)
-
-        # Countdown phases
+        # Keep original countdown phases
         if not sell_countdown_active:
             if buy_setup_complete and not buy_countdown_active and not need_new_buy_setup:
                 if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
