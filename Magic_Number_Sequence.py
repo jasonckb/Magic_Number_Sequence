@@ -211,11 +211,15 @@ def calculate_td_sequential(df):
     sell_setup_complete = False
     setup_start_idx = 0
     
+    # Initialize recycle tracking variables
+    potential_recycle_start = -1
+    recycle_countdown_type = None
+    
     # Initialize plus prevention flags
     buy_plus_without_setup = False
     sell_plus_without_setup = False
     
-    # Initialize countdown tracking
+    # Initialize counters and flags
     buy_countdown_bars = []
     sell_countdown_bars = []
     tdst = TDSTLevels()
@@ -228,9 +232,6 @@ def calculate_td_sequential(df):
     bar8_close_buy = None
     bar8_close_sell = None
     
-    # Initialize 18-bar rule tracking
-    last_opposite_flip = {'buy': -1, 'sell': -1}
-    
     for i in range(len(df)):
         # Check TDST violations
         if buy_countdown_active and tdst.check_resistance_violation(df['Close'].iloc[i]):
@@ -239,6 +240,8 @@ def calculate_td_sequential(df):
             buy_countdown_bars = []
             waiting_for_buy_13 = False
             bar8_close_buy = None
+            potential_recycle_start = -1
+            recycle_countdown_type = None
             buy_plus_without_setup = False
             
         if sell_countdown_active and tdst.check_support_violation(df['Close'].iloc[i]):
@@ -247,175 +250,190 @@ def calculate_td_sequential(df):
             sell_countdown_bars = []
             waiting_for_sell_13 = False
             bar8_close_sell = None
+            potential_recycle_start = -1
+            recycle_countdown_type = None
             sell_plus_without_setup = False
         
-        # Track opposite price flips for 18-bar rule
-        if check_buy_flip(df, i) and sell_countdown_active:
-            last_opposite_flip['sell'] = i
-            # Check if no sell flip in last 18 bars
-            no_sell_flip = True
-            for j in range(max(0, i-18), i+1):
-                if check_sell_flip(df, j):
-                    no_sell_flip = False
-                    break
-            if no_sell_flip:
-                sell_countdown_active = False
-                sell_setup_count = 0
-                sell_countdown_bars = []
-                waiting_for_sell_13 = False
-                bar8_close_sell = None
-                sell_plus_without_setup = False
-                
-        if check_sell_flip(df, i) and buy_countdown_active:
-            last_opposite_flip['buy'] = i
-            # Check if no buy flip in last 18 bars
-            no_buy_flip = True
-            for j in range(max(0, i-18), i+1):
-                if check_buy_flip(df, j):
-                    no_buy_flip = False
-                    break
-            if no_buy_flip:
+        # Check for potential recycle starts
+        if buy_countdown_active and check_sell_flip(df, i):
+            potential_recycle_start = i
+            recycle_countdown_type = 'buy'
+        elif sell_countdown_active and check_buy_flip(df, i):
+            potential_recycle_start = i
+            recycle_countdown_type = 'sell'
+            
+        # Check for recycle completion
+        if potential_recycle_start >= 0:
+            if (recycle_countdown_type == 'buy' and 
+                check_recycle_completion(i, potential_recycle_start, sell_setup)):
                 buy_countdown_active = False
                 buy_setup_count = 0
                 buy_countdown_bars = []
                 waiting_for_buy_13 = False
                 bar8_close_buy = None
+                potential_recycle_start = -1
+                recycle_countdown_type = None
                 buy_plus_without_setup = False
+                buy_countdown[potential_recycle_start:i+1] = 0
+                buy_deferred[potential_recycle_start:i+1] = False
+                
+            elif (recycle_countdown_type == 'sell' and 
+                  check_recycle_completion(i, potential_recycle_start, buy_setup)):
+                sell_countdown_active = False
+                sell_setup_count = 0
+                sell_countdown_bars = []
+                waiting_for_sell_13 = False
+                bar8_close_sell = None
+                potential_recycle_start = -1
+                recycle_countdown_type = None
+                sell_plus_without_setup = False
+                sell_countdown[potential_recycle_start:i+1] = 0
+                sell_deferred[potential_recycle_start:i+1] = False
+                
+            elif i - potential_recycle_start > 18:
+                potential_recycle_start = -1
+                recycle_countdown_type = None
         
         # Track if setup 1 occurs at this bar
         setup_one_at_current_bar = False
         
-        # Buy Setup Phase
-        if check_buy_flip(df, i):
-            if not buy_plus_without_setup:
+        # Setup flips
+        if check_buy_flip(df, i) and not sell_countdown_active:
+            # Allow setup 1 if either: no plus seen, or this bar has 13
+            if not buy_plus_without_setup or (waiting_for_buy_13 and safe_compare(df['Low'].iloc[i], bar8_close_buy, '<=')):
                 buy_setup_active = True
                 sell_setup_active = False
                 setup_start_idx = i
                 buy_setup[i] = 1
                 setup_one_at_current_bar = True
-        elif buy_setup_active and check_buy_setup(df, i):
-            if i > 0 and buy_setup[i-1] > 0:
-                current_count = buy_setup[i-1] + 1
-                if current_count <= 9:
-                    buy_setup[i] = current_count
-                    if current_count == 9:
-                        if check_buy_perfection(df, setup_start_idx, i):
-                            buy_perfection[i] = 1
-                        buy_setup_active = False
-                        buy_setup_complete = True
-                        need_new_buy_setup = False
-                        resistance = get_tdst_level(df, setup_start_idx, i, True)
-                        tdst.add_resistance(resistance, df.index[i])
-            else:
-                buy_setup[i] = 1
-        else:
-            buy_setup_active = False
-        
-        # Sell Setup Phase
-        if check_sell_flip(df, i):
-            if not sell_plus_without_setup:
+        elif check_sell_flip(df, i) and not buy_countdown_active:
+            # Allow setup 1 if either: no plus seen, or this bar has 13
+            if not sell_plus_without_setup or (waiting_for_sell_13 and safe_compare(df['High'].iloc[i], bar8_close_sell, '>=')):
                 sell_setup_active = True
                 buy_setup_active = False
                 setup_start_idx = i
                 sell_setup[i] = 1
                 setup_one_at_current_bar = True
-        elif sell_setup_active and check_sell_setup(df, i):
-            if i > 0 and sell_setup[i-1] > 0:
-                current_count = sell_setup[i-1] + 1
-                if current_count <= 9:
-                    sell_setup[i] = current_count
-                    if current_count == 9:
-                        if check_sell_perfection(df, setup_start_idx, i):
-                            sell_perfection[i] = 1
-                        sell_setup_active = False
-                        sell_setup_complete = True
-                        need_new_sell_setup = False
-                        support = get_tdst_level(df, setup_start_idx, i, False)
-                        tdst.add_support(support, df.index[i])
-            else:
-                sell_setup[i] = 1
-        else:
-            sell_setup_active = False
         
-        # Buy Countdown Phase
-        if buy_setup_complete and not buy_countdown_active and not need_new_buy_setup:
-            if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
-                buy_countdown_active = True
-                buy_setup_complete = False
-                buy_countdown[i] = 1
-                buy_setup_count = 1
-                buy_countdown_bars = [i]
-                waiting_for_buy_13 = False
-                bar8_close_buy = None
-                
-        elif buy_countdown_active:
-            if waiting_for_buy_13:
-                # If bar 8 rule is met, mark 13 without checking 2-bar rule
-                if safe_compare(df['Low'].iloc[i], bar8_close_buy, '<='):
-                    buy_countdown[i] = 13
-                    buy_countdown_active = False
+        # Buy setup phase
+        if buy_setup_active and not sell_countdown_active:
+            if check_buy_setup(df, i):
+                if i > 0 and buy_setup[i-1] > 0:
+                    current_count = buy_setup[i-1] + 1
+                    if current_count <= 9:
+                        buy_setup[i] = current_count
+                        if current_count == 9:
+                            if check_buy_perfection(df, setup_start_idx, i):
+                                buy_perfection[i] = 1
+                            buy_setup_active = False
+                            buy_setup_complete = True
+                            need_new_buy_setup = False
+                            resistance = get_tdst_level(df, setup_start_idx, i, True)
+                            tdst.add_resistance(resistance, df.index[i])
+                else:
+                    buy_setup[i] = 1
+            else:
+                buy_setup_active = False
+        
+        # Sell setup phase
+        if sell_setup_active and not buy_countdown_active:
+            if check_sell_setup(df, i):
+                if i > 0 and sell_setup[i-1] > 0:
+                    current_count = sell_setup[i-1] + 1
+                    if current_count <= 9:
+                        sell_setup[i] = current_count
+                        if current_count == 9:
+                            if check_sell_perfection(df, setup_start_idx, i):
+                                sell_perfection[i] = 1
+                            sell_setup_active = False
+                            sell_setup_complete = True
+                            need_new_sell_setup = False
+                            support = get_tdst_level(df, setup_start_idx, i, False)
+                            tdst.add_support(support, df.index[i])
+                else:
+                    sell_setup[i] = 1
+            else:
+                sell_setup_active = False
+        
+        # Buy countdown phase
+        if not sell_countdown_active:
+            if buy_setup_complete and not buy_countdown_active and not need_new_buy_setup:
+                if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
+                    buy_countdown_active = True
+                    buy_setup_complete = False
+                    buy_countdown[i] = 1
+                    buy_setup_count = 1
+                    buy_countdown_bars = [i]
                     waiting_for_buy_13 = False
                     bar8_close_buy = None
-                    need_new_buy_setup = True
-                    buy_plus_without_setup = False
+                    
+            elif buy_countdown_active:
+                if waiting_for_buy_13:
+                    # If bar 8 rule is met, mark 13 without checking 2-bar rule
+                    if safe_compare(df['Low'].iloc[i], bar8_close_buy, '<='):
+                        buy_countdown[i] = 13
+                        buy_countdown_active = False
+                        waiting_for_buy_13 = False
+                        bar8_close_buy = None
+                        need_new_buy_setup = True
+                        buy_plus_without_setup = False
+                    else:
+                        # For '+', still need 2-bar rule
+                        if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
+                            buy_deferred[i] = True
+                            if not setup_one_at_current_bar:
+                                buy_plus_without_setup = True
                 else:
-                    # For '+', still need 2-bar rule
                     if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
-                        buy_deferred[i] = True
-                        if not setup_one_at_current_bar:
-                            buy_plus_without_setup = True
-            else:
-                if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
-                    buy_countdown_bars.append(i)
-                    if buy_setup_count < 12:
-                        buy_setup_count += 1
-                        buy_countdown[i] = buy_setup_count
-                        if buy_setup_count == 8:
-                            bar8_close_buy = float(df['Close'].iloc[i])
-                        elif buy_setup_count == 12:
-                            waiting_for_buy_13 = True
-        
-        # Sell Countdown Phase
-        if sell_setup_complete and not sell_countdown_active and not need_new_sell_setup:
-            if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
-                sell_countdown_active = True
-                sell_setup_complete = False
-                sell_countdown[i] = 1
-                sell_setup_count = 1
-                sell_countdown_bars = [i]
-                waiting_for_sell_13 = False
-                bar8_close_sell = None
-                
-        elif sell_countdown_active:
-            if waiting_for_sell_13:
-                # If bar 8 rule is met, mark 13 without checking 2-bar rule
-                if safe_compare(df['High'].iloc[i], bar8_close_sell, '>='):
-                    sell_countdown[i] = 13
-                    sell_countdown_active = False
+                        buy_countdown_bars.append(i)
+                        if buy_setup_count < 12:
+                            buy_setup_count += 1
+                            buy_countdown[i] = buy_setup_count
+                            if buy_setup_count == 8:
+                                bar8_close_buy = float(df['Close'].iloc[i])
+                            elif buy_setup_count == 12:
+                                waiting_for_buy_13 = True
+
+        # Sell countdown phase
+        if not buy_countdown_active:
+            if sell_setup_complete and not sell_countdown_active and not need_new_sell_setup:
+                if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
+                    sell_countdown_active = True
+                    sell_setup_complete = False
+                    sell_countdown[i] = 1
+                    sell_setup_count = 1
+                    sell_countdown_bars = [i]
                     waiting_for_sell_13 = False
                     bar8_close_sell = None
-                    need_new_sell_setup = True
-                    sell_plus_without_setup = False
+                    
+            elif sell_countdown_active:
+                if waiting_for_sell_13:
+                    # If bar 8 rule is met, mark 13 without checking 2-bar rule
+                    if safe_compare(df['High'].iloc[i], bar8_close_sell, '>='):
+                        sell_countdown[i] = 13
+                        sell_countdown_active = False
+                        waiting_for_sell_13 = False
+                        bar8_close_sell = None
+                        need_new_sell_setup = True
+                        sell_plus_without_setup = False
+                    else:
+                        # For '+', still need 2-bar rule
+                        if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
+                            sell_deferred[i] = True
+                            if not setup_one_at_current_bar:
+                                sell_plus_without_setup = True
                 else:
-                    # For '+', still need 2-bar rule
                     if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
-                        sell_deferred[i] = True
-                        if not setup_one_at_current_bar:
-                            sell_plus_without_setup = True
-            else:
-                if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
-                    sell_countdown_bars.append(i)
-                    if sell_setup_count < 12:
-                        sell_setup_count += 1
-                        sell_countdown[i] = sell_setup_count
-                        if sell_setup_count == 8:
-                            bar8_close_sell = float(df['Close'].iloc[i])
-                        elif sell_setup_count == 12:
-                            waiting_for_sell_13 = True
+                        sell_countdown_bars.append(i)
+                        if sell_setup_count < 12:
+                            sell_setup_count += 1
+                            sell_countdown[i] = sell_setup_count
+                            if sell_setup_count == 8:
+                                bar8_close_sell = float(df['Close'].iloc[i])
+                            elif sell_setup_count == 12:
+                                waiting_for_sell_13 = True
     
     return buy_setup, sell_setup, buy_countdown, sell_countdown, buy_perfection, sell_perfection, buy_deferred, sell_deferred, tdst
-
-
 
 def create_td_sequential_chart(df, ticker):
     if df.empty:
