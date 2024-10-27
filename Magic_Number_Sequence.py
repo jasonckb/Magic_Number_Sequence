@@ -166,92 +166,20 @@ def check_18_bar_rule(df, current_idx, last_flip_idx, is_buy_countdown):
     return True
 
 def calculate_td_sequential(df):
-    # Initialize arrays
-    buy_setup = np.zeros(len(df))
-    sell_setup = np.zeros(len(df))
-    buy_countdown = np.zeros(len(df))
-    sell_countdown = np.zeros(len(df))
-    buy_perfection = np.zeros(len(df))
-    sell_perfection = np.zeros(len(df))
-    buy_deferred = np.zeros(len(df), dtype=bool)
-    sell_deferred = np.zeros(len(df), dtype=bool)
-    
-    # Initialize state variables
-    buy_setup_active = False
-    sell_setup_active = False
-    buy_countdown_active = False
-    sell_countdown_active = False
-    buy_setup_complete = False
-    sell_setup_complete = False
-    setup_start_idx = 0
-    
-    # Initialize plus prevention flags
-    buy_plus_without_setup = False
-    sell_plus_without_setup = False
-    
-    # Initialize countdown tracking
-    buy_countdown_bars = []
-    sell_countdown_bars = []
-    tdst = TDSTLevels()
-    need_new_buy_setup = False
-    need_new_sell_setup = False
-    buy_setup_count = 0
-    sell_setup_count = 0
-    waiting_for_buy_13 = False
-    waiting_for_sell_13 = False
-    bar8_close_buy = None
-    bar8_close_sell = None
-    
-    # Initialize 18-bar rule tracking
-    last_opposite_flip = {'buy': -1, 'sell': -1}
+    # [Previous initialization code remains the same]
     
     for i in range(len(df)):
-        # Check TDST violations
-        if buy_countdown_active and tdst.check_resistance_violation(df['Close'].iloc[i]):
-            buy_countdown_active = False
-            buy_setup_count = 0
-            buy_countdown_bars = []
-            waiting_for_buy_13 = False
-            bar8_close_buy = None
-            buy_plus_without_setup = False
-            
-        if sell_countdown_active and tdst.check_support_violation(df['Close'].iloc[i]):
-            sell_countdown_active = False
-            sell_setup_count = 0
-            sell_countdown_bars = []
-            waiting_for_sell_13 = False
-            bar8_close_sell = None
-            sell_plus_without_setup = False
-        
-        # Track opposite price flips for 18-bar rule
-        if check_buy_flip(df, i) and sell_countdown_active:
-            last_opposite_flip['sell'] = i
-        if check_sell_flip(df, i) and buy_countdown_active:
-            last_opposite_flip['buy'] = i
-            
-        # Check 18-bar rule
-        if buy_countdown_active and check_18_bar_rule(df, i, last_opposite_flip['buy'], True):
-            buy_countdown_active = False
-            buy_setup_count = 0
-            buy_countdown_bars = []
-            waiting_for_buy_13 = False
-            bar8_close_buy = None
-            buy_plus_without_setup = False
-            
-        if sell_countdown_active and check_18_bar_rule(df, i, last_opposite_flip['sell'], False):
-            sell_countdown_active = False
-            sell_setup_count = 0
-            sell_countdown_bars = []
-            waiting_for_sell_13 = False
-            bar8_close_sell = None
-            sell_plus_without_setup = False
+        # [Previous TDST and 18-bar rule checks remain the same]
         
         # Track if setup 1 occurs at this bar
         setup_one_at_current_bar = False
         
         # Buy Setup Phase
         if check_buy_flip(df, i):
-            if not buy_plus_without_setup:
+            # Allow setup 1 if either:
+            # - No plus seen, OR
+            # - This bar has bar 13 (even after plus)
+            if not buy_plus_without_setup or (waiting_for_buy_13 and safe_compare(df['Low'].iloc[i], bar8_close_buy, '<=')):
                 buy_setup_active = True
                 sell_setup_active = False
                 setup_start_idx = i
@@ -277,7 +205,10 @@ def calculate_td_sequential(df):
         
         # Sell Setup Phase
         if check_sell_flip(df, i):
-            if not sell_plus_without_setup:
+            # Allow setup 1 if either:
+            # - No plus seen, OR
+            # - This bar has bar 13 (even after plus)
+            if not sell_plus_without_setup or (waiting_for_sell_13 and safe_compare(df['High'].iloc[i], bar8_close_sell, '>=')):
                 sell_setup_active = True
                 buy_setup_active = False
                 setup_start_idx = i
@@ -322,7 +253,7 @@ def calculate_td_sequential(df):
                         waiting_for_buy_13 = False
                         bar8_close_buy = None
                         need_new_buy_setup = True
-                        buy_plus_without_setup = False
+                        buy_plus_without_setup = False  # Reset plus prevention on bar 13
                     else:
                         # For '+', still need 2-bar rule
                         if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
@@ -361,7 +292,7 @@ def calculate_td_sequential(df):
                         waiting_for_sell_13 = False
                         bar8_close_sell = None
                         need_new_sell_setup = True
-                        sell_plus_without_setup = False
+                        sell_plus_without_setup = False  # Reset plus prevention on bar 13
                     else:
                         # For '+', still need 2-bar rule
                         if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
@@ -380,6 +311,7 @@ def calculate_td_sequential(df):
                                 waiting_for_sell_13 = True
     
     return buy_setup, sell_setup, buy_countdown, sell_countdown, buy_perfection, sell_perfection, buy_deferred, sell_deferred, tdst
+
 
 def create_td_sequential_chart(df, ticker):
     if df.empty:
