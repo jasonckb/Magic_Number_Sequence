@@ -227,11 +227,17 @@ def calculate_td_sequential(df):
     waiting_for_sell_13 = False
     bar8_close_buy = None
     bar8_close_sell = None
-
+    
     # Add plus sign control flags
     first_buy_plus_idx = -1
     first_sell_plus_idx = -1
     
+    # Add 18-bar rule flags
+    opposite_flip_counter = 0
+    buy_opposite_flip_active = False
+    sell_opposite_flip_active = False
+    last_opposite_flip_idx = -1
+
     for i in range(len(df)):
         # TDST violation checks
         if buy_countdown_active and tdst.check_resistance_violation(df['Close'].iloc[i]):
@@ -300,37 +306,37 @@ def calculate_td_sequential(df):
         # Add 18-bar rule checks
         if buy_countdown_active:
             if check_sell_flip(df, i):
-                opposite_flip_active = True
+                buy_opposite_flip_active = True
                 opposite_flip_counter = 0
                 last_opposite_flip_idx = i
-            elif opposite_flip_active:
+            elif buy_opposite_flip_active:
                 if check_buy_flip(df, i):
-                    opposite_flip_active = False
+                    buy_opposite_flip_active = False
                     opposite_flip_counter = 0
                 else:
                     opposite_flip_counter += 1
                     if opposite_flip_counter >= 18:
                         buy_countdown_active = False
                         buy_countdown[last_opposite_flip_idx:i+1] = 0
-                        opposite_flip_active = False
+                        buy_opposite_flip_active = False
                         opposite_flip_counter = 0
                         first_buy_plus_idx = -1
 
         if sell_countdown_active:
             if check_buy_flip(df, i):
-                opposite_flip_active = True
+                sell_opposite_flip_active = True
                 opposite_flip_counter = 0
                 last_opposite_flip_idx = i
-            elif opposite_flip_active:
+            elif sell_opposite_flip_active:
                 if check_sell_flip(df, i):
-                    opposite_flip_active = False
+                    sell_opposite_flip_active = False
                     opposite_flip_counter = 0
                 else:
                     opposite_flip_counter += 1
                     if opposite_flip_counter >= 18:
                         sell_countdown_active = False
                         sell_countdown[last_opposite_flip_idx:i+1] = 0
-                        opposite_flip_active = False
+                        sell_opposite_flip_active = False
                         opposite_flip_counter = 0
                         first_sell_plus_idx = -1
 
