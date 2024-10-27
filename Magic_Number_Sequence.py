@@ -228,6 +228,10 @@ def calculate_td_sequential(df):
     bar8_close_buy = None
     bar8_close_sell = None
 
+    # Add plus sign control flags
+    first_buy_plus_idx = -1
+    first_sell_plus_idx = -1
+    
     for i in range(len(df)):
         # TDST violation checks
         if buy_countdown_active and tdst.check_resistance_violation(df['Close'].iloc[i]):
@@ -239,6 +243,7 @@ def calculate_td_sequential(df):
             potential_recycle_start = -1
             recycle_countdown_type = None
             buy_plus_without_setup = False
+            first_buy_plus_idx = -1
             
         if sell_countdown_active and tdst.check_support_violation(df['Close'].iloc[i]):
             sell_countdown_active = False
@@ -249,25 +254,108 @@ def calculate_td_sequential(df):
             potential_recycle_start = -1
             recycle_countdown_type = None
             sell_plus_without_setup = False
+            first_sell_plus_idx = -1
+        
+        # Recycle checks
+        if buy_countdown_active and check_sell_flip(df, i):
+            potential_recycle_start = i
+            recycle_countdown_type = 'buy'
+        elif sell_countdown_active and check_buy_flip(df, i):
+            potential_recycle_start = i
+            recycle_countdown_type = 'sell'
+            
+        if potential_recycle_start >= 0:
+            if (recycle_countdown_type == 'buy' and 
+                check_recycle_completion(i, potential_recycle_start, sell_setup)):
+                buy_countdown_active = False
+                buy_setup_count = 0
+                buy_countdown_bars = []
+                waiting_for_buy_13 = False
+                bar8_close_buy = None
+                potential_recycle_start = -1
+                recycle_countdown_type = None
+                buy_plus_without_setup = False
+                buy_countdown[potential_recycle_start:i+1] = 0
+                buy_deferred[potential_recycle_start:i+1] = False
+                first_buy_plus_idx = -1
+                
+            elif (recycle_countdown_type == 'sell' and 
+                  check_recycle_completion(i, potential_recycle_start, buy_setup)):
+                sell_countdown_active = False
+                sell_setup_count = 0
+                sell_countdown_bars = []
+                waiting_for_sell_13 = False
+                bar8_close_sell = None
+                potential_recycle_start = -1
+                recycle_countdown_type = None
+                sell_plus_without_setup = False
+                sell_countdown[potential_recycle_start:i+1] = 0
+                sell_deferred[potential_recycle_start:i+1] = False
+                first_sell_plus_idx = -1
+                
+            elif i - potential_recycle_start > 18:
+                potential_recycle_start = -1
+                recycle_countdown_type = None
+
+        # Add 18-bar rule checks
+        if buy_countdown_active:
+            if check_sell_flip(df, i):
+                opposite_flip_active = True
+                opposite_flip_counter = 0
+                last_opposite_flip_idx = i
+            elif opposite_flip_active:
+                if check_buy_flip(df, i):
+                    opposite_flip_active = False
+                    opposite_flip_counter = 0
+                else:
+                    opposite_flip_counter += 1
+                    if opposite_flip_counter >= 18:
+                        buy_countdown_active = False
+                        buy_countdown[last_opposite_flip_idx:i+1] = 0
+                        opposite_flip_active = False
+                        opposite_flip_counter = 0
+                        first_buy_plus_idx = -1
+
+        if sell_countdown_active:
+            if check_buy_flip(df, i):
+                opposite_flip_active = True
+                opposite_flip_counter = 0
+                last_opposite_flip_idx = i
+            elif opposite_flip_active:
+                if check_sell_flip(df, i):
+                    opposite_flip_active = False
+                    opposite_flip_counter = 0
+                else:
+                    opposite_flip_counter += 1
+                    if opposite_flip_counter >= 18:
+                        sell_countdown_active = False
+                        sell_countdown[last_opposite_flip_idx:i+1] = 0
+                        opposite_flip_active = False
+                        opposite_flip_counter = 0
+                        first_sell_plus_idx = -1
 
         setup_one_at_current_bar = False
         
-        # Modified setup flips - allow during countdown
+        # Modified setup flips - only allow when no plus is active or at the same bar as first plus
         if check_buy_flip(df, i):
-            buy_setup_active = True
-            sell_setup_active = False
-            setup_start_idx = i
-            buy_setup[i] = 1
-            setup_one_at_current_bar = True
-            
+            if (first_buy_plus_idx == -1 and first_sell_plus_idx == -1) or \
+               (first_buy_plus_idx == i):
+                buy_setup_active = True
+                sell_setup_active = False
+                setup_start_idx = i
+                buy_setup[i] = 1
+                setup_one_at_current_bar = True
+                
         elif check_sell_flip(df, i):
-            sell_setup_active = True
-            buy_setup_active = False
-            setup_start_idx = i
-            sell_setup[i] = 1
-            setup_one_at_current_bar = True
+            if (first_sell_plus_idx == -1 and first_buy_plus_idx == -1) or \
+               (first_sell_plus_idx == i):
+                sell_setup_active = True
+                buy_setup_active = False
+                setup_start_idx = i
+                sell_setup[i] = 1
+                setup_one_at_current_bar = True
         
-        # Buy setup phase
+        # Buy setup phase with consecutive check
         if buy_setup_active:
             if check_buy_setup(df, i):
                 if i > 0 and buy_setup[i-1] > 0:
@@ -290,7 +378,7 @@ def calculate_td_sequential(df):
                 buy_setup_active = False
                 buy_setup[setup_start_idx:i+1] = 0
         
-        # Sell setup phase
+        # Sell setup phase with consecutive check
         if sell_setup_active:
             if check_sell_setup(df, i):
                 if i > 0 and sell_setup[i-1] > 0:
@@ -312,8 +400,8 @@ def calculate_td_sequential(df):
             else:
                 sell_setup_active = False
                 sell_setup[setup_start_idx:i+1] = 0
-
-        # Keep original countdown phases
+        
+        # Buy countdown phase with plus sign control
         if not sell_countdown_active:
             if buy_setup_complete and not buy_countdown_active and not need_new_buy_setup:
                 if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
@@ -335,8 +423,11 @@ def calculate_td_sequential(df):
                             bar8_close_buy = None
                             need_new_buy_setup = True
                             buy_plus_without_setup = False
+                            first_buy_plus_idx = -1
                         else:
                             buy_deferred[i] = True
+                            if first_buy_plus_idx == -1:
+                                first_buy_plus_idx = i
                             if not setup_one_at_current_bar:
                                 buy_plus_without_setup = True
                 else:
@@ -350,6 +441,7 @@ def calculate_td_sequential(df):
                             elif buy_setup_count == 12:
                                 waiting_for_buy_13 = True
 
+        # Sell countdown phase with plus sign control
         if not buy_countdown_active:
             if sell_setup_complete and not sell_countdown_active and not need_new_sell_setup:
                 if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
@@ -371,8 +463,11 @@ def calculate_td_sequential(df):
                             bar8_close_sell = None
                             need_new_sell_setup = True
                             sell_plus_without_setup = False
+                            first_sell_plus_idx = -1
                         else:
                             sell_deferred[i] = True
+                            if first_sell_plus_idx == -1:
+                                first_sell_plus_idx = i
                             if not setup_one_at_current_bar:
                                 sell_plus_without_setup = True
                 else:
