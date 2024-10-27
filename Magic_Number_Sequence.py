@@ -249,12 +249,17 @@ def calculate_td_sequential(df):
         # Track if setup 1 occurs at this bar
         setup_one_at_current_bar = False
         
+        # Track if setup 1 occurs at this bar
+        setup_one_at_current_bar = False
+        
         # Buy Setup Phase
         if check_buy_flip(df, i):
-            # Allow setup 1 if either:
+            # Allow setup 1 if:
             # - No plus seen, OR
-            # - This bar has bar 13 (even after plus)
-            if not buy_plus_without_setup or (waiting_for_buy_13 and safe_compare(df['Low'].iloc[i], bar8_close_buy, '<=')):
+            # - This bar has buy plus or buy 13
+            if (not buy_plus_without_setup or 
+                (buy_deferred[i] or  # Has plus on this bar
+                 (waiting_for_buy_13 and safe_compare(df['Low'].iloc[i], bar8_close_buy, '<=')))):  # Has bar 13 on this bar
                 buy_setup_active = True
                 sell_setup_active = False
                 setup_start_idx = i
@@ -280,10 +285,12 @@ def calculate_td_sequential(df):
         
         # Sell Setup Phase
         if check_sell_flip(df, i):
-            # Allow setup 1 if either:
+            # Allow setup 1 if:
             # - No plus seen, OR
-            # - This bar has bar 13 (even after plus)
-            if not sell_plus_without_setup or (waiting_for_sell_13 and safe_compare(df['High'].iloc[i], bar8_close_sell, '>=')):
+            # - This bar has sell plus or sell 13
+            if (not sell_plus_without_setup or 
+                (sell_deferred[i] or  # Has plus on this bar
+                 (waiting_for_sell_13 and safe_compare(df['High'].iloc[i], bar8_close_sell, '>=')))):  # Has bar 13 on this bar
                 sell_setup_active = True
                 buy_setup_active = False
                 setup_start_idx = i
