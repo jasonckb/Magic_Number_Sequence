@@ -265,23 +265,29 @@ def calculate_td_sequential(df):
                 setup_start_idx = i
                 buy_setup[i] = 1
                 setup_one_at_current_bar = True
-        elif buy_setup_active and check_buy_setup(df, i):
-            if i > 0 and buy_setup[i-1] > 0:
-                current_count = buy_setup[i-1] + 1
-                if current_count <= 9:
-                    buy_setup[i] = current_count
-                    if current_count == 9:
-                        if check_buy_perfection(df, setup_start_idx, i):
-                            buy_perfection[i] = 1
-                        buy_setup_active = False
-                        buy_setup_complete = True
-                        need_new_buy_setup = False
-                        resistance = get_tdst_level(df, setup_start_idx, i, True)
-                        tdst.add_resistance(resistance, df.index[i])
+        elif buy_setup_active:
+            # Check if setup should continue
+            if check_buy_setup(df, i):
+                if i > 0 and buy_setup[i-1] > 0:
+                    current_count = buy_setup[i-1] + 1
+                    if current_count <= 9:
+                        buy_setup[i] = current_count
+                        if current_count == 9:
+                            if check_buy_perfection(df, setup_start_idx, i):
+                                buy_perfection[i] = 1
+                            buy_setup_active = False
+                            buy_setup_complete = True
+                            need_new_buy_setup = False
+                            resistance = get_tdst_level(df, setup_start_idx, i, True)
+                            tdst.add_resistance(resistance, df.index[i])
+                else:
+                    buy_setup[i] = 1
             else:
-                buy_setup[i] = 1
-        else:
-            buy_setup_active = False
+                # Clear interrupted setup
+                buy_setup_active = False
+                # Only clear if we've had 4 bars without continuation
+                if i - setup_start_idx >= 4:
+                    buy_setup[setup_start_idx:i+1] = 0
         
         # Sell Setup Phase
         if check_sell_flip(df, i):
@@ -296,23 +302,29 @@ def calculate_td_sequential(df):
                 setup_start_idx = i
                 sell_setup[i] = 1
                 setup_one_at_current_bar = True
-        elif sell_setup_active and check_sell_setup(df, i):
-            if i > 0 and sell_setup[i-1] > 0:
-                current_count = sell_setup[i-1] + 1
-                if current_count <= 9:
-                    sell_setup[i] = current_count
-                    if current_count == 9:
-                        if check_sell_perfection(df, setup_start_idx, i):
-                            sell_perfection[i] = 1
-                        sell_setup_active = False
-                        sell_setup_complete = True
-                        need_new_sell_setup = False
-                        support = get_tdst_level(df, setup_start_idx, i, False)
-                        tdst.add_support(support, df.index[i])
+        elif sell_setup_active:
+            # Check if setup should continue
+            if check_sell_setup(df, i):
+                if i > 0 and sell_setup[i-1] > 0:
+                    current_count = sell_setup[i-1] + 1
+                    if current_count <= 9:
+                        sell_setup[i] = current_count
+                        if current_count == 9:
+                            if check_sell_perfection(df, setup_start_idx, i):
+                                sell_perfection[i] = 1
+                            sell_setup_active = False
+                            sell_setup_complete = True
+                            need_new_sell_setup = False
+                            support = get_tdst_level(df, setup_start_idx, i, False)
+                            tdst.add_support(support, df.index[i])
+                else:
+                    sell_setup[i] = 1
             else:
-                sell_setup[i] = 1
-        else:
-            sell_setup_active = False
+                # Clear interrupted setup
+                sell_setup_active = False
+                # Only clear if we've had 4 bars without continuation
+                if i - setup_start_idx >= 4:
+                    sell_setup[setup_start_idx:i+1] = 0
         
         # Buy Countdown Phase - Only if no sell countdown active
         if not sell_countdown_active:
