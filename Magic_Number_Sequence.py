@@ -251,7 +251,10 @@ def calculate_td_sequential(df):
         
         # Buy Setup Phase
         if check_buy_flip(df, i):
-            if not buy_plus_without_setup:
+            # Allow setup 1 if either:
+            # - No plus seen, OR
+            # - This bar has bar 13 (even after plus)
+            if not buy_plus_without_setup or (waiting_for_buy_13 and safe_compare(df['Low'].iloc[i], bar8_close_buy, '<=')):
                 buy_setup_active = True
                 sell_setup_active = False
                 setup_start_idx = i
@@ -277,7 +280,10 @@ def calculate_td_sequential(df):
         
         # Sell Setup Phase
         if check_sell_flip(df, i):
-            if not sell_plus_without_setup:
+            # Allow setup 1 if either:
+            # - No plus seen, OR
+            # - This bar has bar 13 (even after plus)
+            if not sell_plus_without_setup or (waiting_for_sell_13 and safe_compare(df['High'].iloc[i], bar8_close_sell, '>=')):
                 sell_setup_active = True
                 buy_setup_active = False
                 setup_start_idx = i
@@ -322,7 +328,7 @@ def calculate_td_sequential(df):
                         waiting_for_buy_13 = False
                         bar8_close_buy = None
                         need_new_buy_setup = True
-                        buy_plus_without_setup = False
+                        buy_plus_without_setup = False  # Reset plus prevention on bar 13
                     else:
                         # For '+', still need 2-bar rule
                         if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
@@ -361,7 +367,7 @@ def calculate_td_sequential(df):
                         waiting_for_sell_13 = False
                         bar8_close_sell = None
                         need_new_sell_setup = True
-                        sell_plus_without_setup = False
+                        sell_plus_without_setup = False  # Reset plus prevention on bar 13
                     else:
                         # For '+', still need 2-bar rule
                         if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
