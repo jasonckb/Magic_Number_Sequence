@@ -194,21 +194,28 @@ def check_recycle_completion(current_idx, start_idx, setup_values):
 def calculate_td_sequential(df):
     """
     Calculate TD Sequential indicators including TDST and additional checks
+    Returns tuple of (buy_setup, sell_setup, buy_countdown, sell_countdown, 
+                     buy_perfection, sell_perfection, buy_deferred, sell_deferred, tdst)
     """
-    # Initialize columns
-    df['buy_setup'] = 0
-    df['sell_setup'] = 0
-    df['buy_countdown'] = 0
-    df['sell_countdown'] = 0
-    df['setup_phase'] = ''
-    df['tdst_support'] = 0
-    df['tdst_resistance'] = 0
-    df['buy_setup_perfection'] = False
-    df['sell_setup_perfection'] = False
-    df['plus_count'] = 0
+    # Initialize arrays for tracking
+    buy_setup = [0] * len(df)
+    sell_setup = [0] * len(df)
+    buy_countdown = [0] * len(df)
+    sell_countdown = [0] * len(df)
+    buy_perfection = [False] * len(df)
+    sell_perfection = [False] * len(df)
+    buy_deferred = [False] * len(df)
+    sell_deferred = [False] * len(df)
+    
+    # Initialize TDST tracker
+    tdst = TDSTLevels()
     
     # Minimum bars needed for calculation
     min_bars = 4
+    
+    # Track setup start positions for perfection checks
+    buy_setup_start = -1
+    sell_setup_start = -1
     
     for i in range(min_bars, len(df)):
         # Price flip conditions using safe comparison
@@ -217,126 +224,96 @@ def calculate_td_sequential(df):
         sell_flip = safe_compare(df['Close'].iloc[i], df['Close'].iloc[i-4], '>') and \
                     safe_compare(df['Close'].iloc[i-1], df['Close'].iloc[i-5], '<')
         
-        # Setup Phase Logic with TDST
+        # Setup Phase Logic
         if buy_flip:
-            if df['sell_setup'].iloc[i-1] > 0 and df['sell_setup'].iloc[i-1] < 9:
-                # Check for consecutive sequence using safe comparison
+            if sell_setup[i-1] > 0 and sell_setup[i-1] < 9:
+                # Check for consecutive sequence
                 consecutive = True
                 for j in range(i-3, i+1):
                     if not safe_compare(df['Close'].iloc[j], df['Close'].iloc[j-4], '<'):
                         consecutive = False
                         break
                 if consecutive:
-                    df.loc[i, 'sell_setup'] = df['sell_setup'].iloc[i-1] + 1
+                    sell_setup[i] = sell_setup[i-1] + 1
+                    if sell_setup[i] == 1:
+                        sell_setup_start = i
                 else:
-                    df.loc[i, 'sell_setup'] = 0
+                    sell_setup[i] = 0
             else:
-                df.loc[i, 'sell_setup'] = 1
+                sell_setup[i] = 1
+                sell_setup_start = i
                 
         if sell_flip:
-            if df['buy_setup'].iloc[i-1] > 0 and df['buy_setup'].iloc[i-1] < 9:
-                # Check for consecutive sequence using safe comparison
+            if buy_setup[i-1] > 0 and buy_setup[i-1] < 9:
+                # Check for consecutive sequence
                 consecutive = True
                 for j in range(i-3, i+1):
                     if not safe_compare(df['Close'].iloc[j], df['Close'].iloc[j-4], '>'):
                         consecutive = False
                         break
                 if consecutive:
-                    df.loc[i, 'buy_setup'] = df['buy_setup'].iloc[i-1] + 1
+                    buy_setup[i] = buy_setup[i-1] + 1
+                    if buy_setup[i] == 1:
+                        buy_setup_start = i
                 else:
-                    df.loc[i, 'buy_setup'] = 0
+                    buy_setup[i] = 0
             else:
-                df.loc[i, 'buy_setup'] = 1
+                buy_setup[i] = 1
+                buy_setup_start = i
         
-        # TDST Support/Resistance using safe_minmax
-        if df['buy_setup'].iloc[i-1] == 9:
-            df.loc[i, 'tdst_support'] = safe_minmax(df['Low'].iloc[i-8:i+1], 'min')
-        if df['sell_setup'].iloc[i-1] == 9:
-            df.loc[i, 'tdst_resistance'] = safe_minmax(df['High'].iloc[i-8:i+1], 'max')
+        # Setup Perfection
+        if buy_setup[i] == 9:
+            buy_perfection[i] = check_buy_perfection(df, buy_setup_start, i)
+            # Set TDST support
+            tdst_level = get_tdst_level(df, buy_setup_start, i, True)
+            tdst.add_support(tdst_level, df.index[i])
             
-        # Setup Perfection using safe_minmax
-        if df['buy_setup'].iloc[i] == 9:
-            low_6_7 = safe_minmax([df['Low'].iloc[i-2], df['Low'].iloc[i-3]], 'min')
-            low_8_9 = safe_minmax([df['Low'].iloc[i], df['Low'].iloc[i-1]], 'min')
-            df.loc[i, 'buy_setup_perfection'] = safe_compare(low_8_9, low_6_7, '<')
-            
-        if df['sell_setup'].iloc[i] == 9:
-            high_6_7 = safe_minmax([df['High'].iloc[i-2], df['High'].iloc[i-3]], 'max')
-            high_8_9 = safe_minmax([df['High'].iloc[i], df['High'].iloc[i-1]], 'max')
-            df.loc[i, 'sell_setup_perfection'] = safe_compare(high_8_9, high_6_7, '>')
+        if sell_setup[i] == 9:
+            sell_perfection[i] = check_sell_perfection(df, sell_setup_start, i)
+            # Set TDST resistance
+            tdst_level = get_tdst_level(df, sell_setup_start, i, False)
+            tdst.add_resistance(tdst_level, df.index[i])
         
         # Clear interrupted setups after 4 bars
-        if df['buy_setup'].iloc[i-1] > 0 and df['buy_setup'].iloc[i-1] < 9:
-            if not buy_flip and i - df['buy_setup'].iloc[i-1] >= 4:
-                df.loc[i, 'buy_setup'] = 0
+        if buy_setup[i-1] > 0 and buy_setup[i-1] < 9:
+            if not buy_flip and i - buy_setup_start >= 4:
+                buy_setup[i] = 0
                 
-        if df['sell_setup'].iloc[i-1] > 0 and df['sell_setup'].iloc[i-1] < 9:
-            if not sell_flip and i - df['sell_setup'].iloc[i-1] >= 4:
-                df.loc[i, 'sell_setup'] = 0
+        if sell_setup[i-1] > 0 and sell_setup[i-1] < 9:
+            if not sell_flip and i - sell_setup_start >= 4:
+                sell_setup[i] = 0
         
-        # Countdown Phase Logic with Plus Count
-        if df['buy_setup'].iloc[i-1] == 9:
-            df.loc[i, 'buy_countdown'] = 1
-            df.loc[i, 'setup_phase'] = 'buy_countdown'
-            df.loc[i, 'plus_count'] = 0
-            
-        elif df['sell_setup'].iloc[i-1] == 9:
-            df.loc[i, 'sell_countdown'] = 1
-            df.loc[i, 'setup_phase'] = 'sell_countdown'
-            df.loc[i, 'plus_count'] = 0
-            
-        # Continue countdown if in progress with bar 8 rule check
-        if df['setup_phase'].iloc[i-1] == 'buy_countdown':
+        # Countdown Phase Logic
+        if buy_setup[i-1] == 9:
+            buy_countdown[i] = 1
+        elif buy_countdown[i-1] > 0 and buy_countdown[i-1] < 13:
             if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<'):
-                df.loc[i, 'buy_countdown'] = df['buy_countdown'].iloc[i-1] + 1
-                df.loc[i, 'setup_phase'] = 'buy_countdown'
-                
-                # Check for + after bar 12
-                if df['buy_countdown'].iloc[i] >= 12:
+                buy_countdown[i] = buy_countdown[i-1] + 1
+                if buy_countdown[i] >= 12:
                     if check_bar8_rule(df, i, i-8, True):
-                        df.loc[i, 'plus_count'] = df['plus_count'].iloc[i-1] + 1
-                
-            # Allow new sell setup during buy countdown
-            if sell_flip:
-                df.loc[i, 'sell_setup'] = 1
-                
-        elif df['setup_phase'].iloc[i-1] == 'sell_countdown':
+                        buy_deferred[i] = True
+                        
+        if sell_setup[i-1] == 9:
+            sell_countdown[i] = 1
+        elif sell_countdown[i-1] > 0 and sell_countdown[i-1] < 13:
             if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>'):
-                df.loc[i, 'sell_countdown'] = df['sell_countdown'].iloc[i-1] + 1
-                df.loc[i, 'setup_phase'] = 'sell_countdown'
-                
-                # Check for + after bar 12
-                if df['sell_countdown'].iloc[i] >= 12:
+                sell_countdown[i] = sell_countdown[i-1] + 1
+                if sell_countdown[i] >= 12:
                     if check_bar8_rule(df, i, i-8, False):
-                        df.loc[i, 'plus_count'] = df['plus_count'].iloc[i-1] + 1
-                
-            # Allow new buy setup during sell countdown
-            if buy_flip:
-                df.loc[i, 'buy_setup'] = 1
+                        sell_deferred[i] = True
         
-        # Reset countdown if conditions are not met
-        if df['buy_countdown'].iloc[i-1] > 0:
-            if not safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<'):
-                df.loc[i, 'buy_countdown'] = 0
-                df.loc[i, 'setup_phase'] = ''
-                df.loc[i, 'plus_count'] = 0
+        # TDST Break Rules
+        if tdst.active_support is not None:
+            if tdst.check_support_violation(df['Close'].iloc[i]):
+                tdst.active_support = None
                 
-        if df['sell_countdown'].iloc[i-1] > 0:
-            if not safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>'):
-                df.loc[i, 'sell_countdown'] = 0
-                df.loc[i, 'setup_phase'] = ''
-                df.loc[i, 'plus_count'] = 0
-                
-        # TDST Break Rules with safe comparison
-        if df['tdst_support'].iloc[i-1] > 0:
-            if safe_compare(df['Close'].iloc[i], df['tdst_support'].iloc[i-1], '<'):
-                df.loc[i, 'tdst_support'] = 0
-                
-        if df['tdst_resistance'].iloc[i-1] > 0:
-            if safe_compare(df['Close'].iloc[i], df['tdst_resistance'].iloc[i-1], '>'):
-                df.loc[i, 'tdst_resistance'] = 0
+        if tdst.active_resistance is not None:
+            if tdst.check_resistance_violation(df['Close'].iloc[i]):
+                tdst.active_resistance = None
     
-    return df
+    return (buy_setup, sell_setup, buy_countdown, sell_countdown,
+            buy_perfection, sell_perfection, buy_deferred, sell_deferred, tdst)
+
 
 
 def create_td_sequential_chart(df, ticker):
