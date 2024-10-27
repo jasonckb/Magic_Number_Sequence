@@ -429,7 +429,6 @@ def calculate_td_sequential(df):
 
 
 
-
 def create_td_sequential_chart(df, ticker):
     if df.empty:
         return None
