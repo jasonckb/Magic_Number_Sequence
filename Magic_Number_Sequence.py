@@ -256,64 +256,126 @@ def calculate_td_sequential(df):
         if check_buy_flip(df, i):
             # Allow setup 1 if:
             # - No plus seen, OR
-            # - This bar has plus mark
-            if not buy_plus_without_setup or buy_deferred[i]:
+            # - This bar has buy plus or buy 13
+            if (not buy_plus_without_setup or 
+                (buy_deferred[i] or  # Has plus on this bar
+                 (waiting_for_buy_13 and safe_compare(df['Low'].iloc[i], bar8_close_buy, '<=')))):  # Has bar 13 on this bar
                 buy_setup_active = True
                 sell_setup_active = False
                 setup_start_idx = i
                 buy_setup[i] = 1
                 setup_one_at_current_bar = True
         elif buy_setup_active:
-            # [Rest of buy setup logic remains exactly the same]
+            # Check if setup should continue
+            if check_buy_setup(df, i):
+                if i > 0 and buy_setup[i-1] > 0:
+                    current_count = buy_setup[i-1] + 1
+                    if current_count <= 9:
+                        buy_setup[i] = current_count
+                        if current_count == 9:
+                            if check_buy_perfection(df, setup_start_idx, i):
+                                buy_perfection[i] = 1
+                            buy_setup_active = False
+                            buy_setup_complete = True
+                            need_new_buy_setup = False
+                            resistance = get_tdst_level(df, setup_start_idx, i, True)
+                            tdst.add_resistance(resistance, df.index[i])
+                else:
+                    buy_setup[i] = 1
+            else:
+                # Clear interrupted setup
+                buy_setup_active = False
+                # Only clear if we've had 4 bars without continuation
+                if i - setup_start_idx >= 4:
+                    buy_setup[setup_start_idx:i+1] = 0
         
         # Sell Setup Phase
         if check_sell_flip(df, i):
             # Allow setup 1 if:
             # - No plus seen, OR
-            # - This bar has plus mark
-            if not sell_plus_without_setup or sell_deferred[i]:
+            # - This bar has sell plus or sell 13
+            if (not sell_plus_without_setup or 
+                (sell_deferred[i] or  # Has plus on this bar
+                 (waiting_for_sell_13 and safe_compare(df['High'].iloc[i], bar8_close_sell, '>=')))):  # Has bar 13 on this bar
                 sell_setup_active = True
                 buy_setup_active = False
                 setup_start_idx = i
                 sell_setup[i] = 1
                 setup_one_at_current_bar = True
         elif sell_setup_active:
-            # [Rest of sell setup logic remains exactly the same]
+            # Check if setup should continue
+            if check_sell_setup(df, i):
+                if i > 0 and sell_setup[i-1] > 0:
+                    current_count = sell_setup[i-1] + 1
+                    if current_count <= 9:
+                        sell_setup[i] = current_count
+                        if current_count == 9:
+                            if check_sell_perfection(df, setup_start_idx, i):
+                                sell_perfection[i] = 1
+                            sell_setup_active = False
+                            sell_setup_complete = True
+                            need_new_sell_setup = False
+                            support = get_tdst_level(df, setup_start_idx, i, False)
+                            tdst.add_support(support, df.index[i])
+                else:
+                    sell_setup[i] = 1
+            else:
+                # Clear interrupted setup
+                sell_setup_active = False
+                # Only clear if we've had 4 bars without continuation
+                if i - setup_start_idx >= 4:
+                    sell_setup[setup_start_idx:i+1] = 0
         
         # Buy Countdown Phase - Only if no sell countdown active
         if not sell_countdown_active:
             if buy_setup_complete and not buy_countdown_active and not need_new_buy_setup:
-                # Allow countdown start if:
-                # - No plus seen, OR
-                # - This bar has plus mark
-                if not buy_plus_without_setup or buy_deferred[i]:
-                    if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
-                        buy_countdown_active = True
-                        buy_setup_complete = False
-                        buy_countdown[i] = 1
-                        buy_setup_count = 1
-                        buy_countdown_bars = [i]
-                        waiting_for_buy_13 = False
-                        bar8_close_buy = None
+                if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
+                    buy_countdown_active = True
+                    buy_setup_complete = False
+                    buy_countdown[i] = 1
+                    buy_setup_count = 1
+                    buy_countdown_bars = [i]
+                    waiting_for_buy_13 = False
+                    bar8_close_buy = None
                     
             elif buy_countdown_active:
-                # [Rest of buy countdown logic remains exactly the same]
+                if waiting_for_buy_13:
+                    # For bar 13, only check bar 8 rule
+                    if safe_compare(df['Low'].iloc[i], bar8_close_buy, '<='):
+                        buy_countdown[i] = 13
+                        buy_countdown_active = False
+                        waiting_for_buy_13 = False
+                        bar8_close_buy = None
+                        need_new_buy_setup = True
+                        buy_plus_without_setup = False  # Reset plus prevention on bar 13
+                    else:
+                        # For '+', still need 2-bar rule
+                        if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
+                            buy_deferred[i] = True
+                            if not setup_one_at_current_bar:
+                                buy_plus_without_setup = True
+                else:
+                    if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
+                        buy_countdown_bars.append(i)
+                        if buy_setup_count < 12:
+                            buy_setup_count += 1
+                            buy_countdown[i] = buy_setup_count
+                            if buy_setup_count == 8:
+                                bar8_close_buy = float(df['Close'].iloc[i])
+                            elif buy_setup_count == 12:
+                                waiting_for_buy_13 = True
         
         # Sell Countdown Phase - Only if no buy countdown active
         if not buy_countdown_active:
             if sell_setup_complete and not sell_countdown_active and not need_new_sell_setup:
-                # Allow countdown start if:
-                # - No plus seen, OR
-                # - This bar has plus mark
-                if not sell_plus_without_setup or sell_deferred[i]:
-                    if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
-                        sell_countdown_active = True
-                        sell_setup_complete = False
-                        sell_countdown[i] = 1
-                        sell_setup_count = 1
-                        sell_countdown_bars = [i]
-                        waiting_for_sell_13 = False
-                        bar8_close_sell = None
+                if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
+                    sell_countdown_active = True
+                    sell_setup_complete = False
+                    sell_countdown[i] = 1
+                    sell_setup_count = 1
+                    sell_countdown_bars = [i]
+                    waiting_for_sell_13 = False
+                    bar8_close_sell = None
                     
             elif sell_countdown_active:
                 if waiting_for_sell_13:
