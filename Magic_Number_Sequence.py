@@ -249,9 +249,6 @@ def calculate_td_sequential(df):
         # Track if setup 1 occurs at this bar
         setup_one_at_current_bar = False
         
-        # Track if setup 1 occurs at this bar
-        setup_one_at_current_bar = False
-        
         # Buy Setup Phase
         if check_buy_flip(df, i):
             # Allow setup 1 if:
@@ -285,9 +282,11 @@ def calculate_td_sequential(df):
             else:
                 # Clear interrupted setup
                 buy_setup_active = False
-                # Only clear if we've had 4 bars without continuation
+                # Clear all setup counts from start to current if interrupted
                 if i - setup_start_idx >= 4:
-                    buy_setup[setup_start_idx:i+1] = 0
+                    for j in range(setup_start_idx, i+1):
+                        if buy_setup[j] > 0:
+                            buy_setup[j] = 0
         
         # Sell Setup Phase
         if check_sell_flip(df, i):
@@ -322,9 +321,11 @@ def calculate_td_sequential(df):
             else:
                 # Clear interrupted setup
                 sell_setup_active = False
-                # Only clear if we've had 4 bars without continuation
+                # Clear all setup counts from start to current if interrupted
                 if i - setup_start_idx >= 4:
-                    sell_setup[setup_start_idx:i+1] = 0
+                    for j in range(setup_start_idx, i+1):
+                        if sell_setup[j] > 0:
+                            sell_setup[j] = 0
         
         # Buy Countdown Phase - Only if no sell countdown active
         if not sell_countdown_active:
@@ -354,6 +355,7 @@ def calculate_td_sequential(df):
                             buy_deferred[i] = True
                             if not setup_one_at_current_bar:
                                 buy_plus_without_setup = True
+                            buy_countdown[i] = buy_countdown[i-1]  # Maintain count during plus
                 else:
                     if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
                         buy_countdown_bars.append(i)
@@ -364,6 +366,8 @@ def calculate_td_sequential(df):
                                 bar8_close_buy = float(df['Close'].iloc[i])
                             elif buy_setup_count == 12:
                                 waiting_for_buy_13 = True
+                    else:
+                        buy_countdown[i] = buy_countdown[i-1]  # Maintain count if condition not met
         
         # Sell Countdown Phase - Only if no buy countdown active
         if not buy_countdown_active:
@@ -393,6 +397,7 @@ def calculate_td_sequential(df):
                             sell_deferred[i] = True
                             if not setup_one_at_current_bar:
                                 sell_plus_without_setup = True
+                            sell_countdown[i] = sell_countdown[i-1]  # Maintain count during plus
                 else:
                     if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
                         sell_countdown_bars.append(i)
@@ -403,8 +408,11 @@ def calculate_td_sequential(df):
                                 bar8_close_sell = float(df['Close'].iloc[i])
                             elif sell_setup_count == 12:
                                 waiting_for_sell_13 = True
+                    else:
+                        sell_countdown[i] = sell_countdown[i-1]  # Maintain count if condition not met
     
     return buy_setup, sell_setup, buy_countdown, sell_countdown, buy_perfection, sell_perfection, buy_deferred, sell_deferred, tdst
+
 
 def create_td_sequential_chart(df, ticker):
     if df.empty:
