@@ -216,12 +216,22 @@ def calculate_td_sequential(df):
             if buy_countdown[i-1] == 0:
                 buy_countdown[i] = 1
             elif buy_countdown[i-1] < 13:
-                if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<'):
-                    buy_countdown[i] = buy_countdown[i-1] + 1
-                    if buy_countdown[i] >= 12 and check_bar8_rule(df, i, i-8, True):
+                if buy_countdown[i-1] == 12:
+                    # Bar 13 only needs to meet bar 8 close rule
+                    if check_bar8_rule(df, i, i-8, True):
+                        buy_countdown[i] = 13
                         buy_deferred[i] = True
                 else:
-                    buy_countdown[i] = buy_countdown[i-1]
+                    # Bars 1-12 need to meet the 2 bars rule
+                    if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<'):
+                        buy_countdown[i] = buy_countdown[i-1] + 1
+                    else:
+                        buy_countdown[i] = buy_countdown[i-1]
+            elif buy_countdown[i-1] == 13:
+                # After bar 13, check for additional + counts
+                if check_bar8_rule(df, i, i-8, True):
+                    buy_deferred[i] = True
+                    buy_countdown[i] = 13
             
             # Allow new sell setup during buy countdown
             if sell_flip:
@@ -233,12 +243,22 @@ def calculate_td_sequential(df):
             if sell_countdown[i-1] == 0:
                 sell_countdown[i] = 1
             elif sell_countdown[i-1] < 13:
-                if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>'):
-                    sell_countdown[i] = sell_countdown[i-1] + 1
-                    if sell_countdown[i] >= 12 and check_bar8_rule(df, i, i-8, False):
+                if sell_countdown[i-1] == 12:
+                    # Bar 13 only needs to meet bar 8 close rule
+                    if check_bar8_rule(df, i, i-8, False):
+                        sell_countdown[i] = 13
                         sell_deferred[i] = True
                 else:
-                    sell_countdown[i] = sell_countdown[i-1]
+                    # Bars 1-12 need to meet the 2 bars rule
+                    if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>'):
+                        sell_countdown[i] = sell_countdown[i-1] + 1
+                    else:
+                        sell_countdown[i] = sell_countdown[i-1]
+            elif sell_countdown[i-1] == 13:
+                # After bar 13, check for additional + counts
+                if check_bar8_rule(df, i, i-8, False):
+                    sell_deferred[i] = True
+                    sell_countdown[i] = 13
             
             # Allow new buy setup during sell countdown
             if buy_flip:
