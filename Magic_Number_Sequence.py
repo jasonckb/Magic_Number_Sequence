@@ -649,70 +649,66 @@ def create_td_sequential_chart(df, ticker):
     return fig
 
 def main():
-    # Remove the st.set_page_config from here
+    # PART 1: Single Stock Chart Analysis in Main Area
+    st.markdown("### Single Stock Analysis")
+    if ticker_input:
+        try:
+            formatted_ticker = check_ticker_format(ticker_input)
+            st.write(f"Analyzing: {formatted_ticker}")
+            
+            end_date = pd.Timestamp.today()
+            start_date = end_date - pd.DateOffset(years=1)
+            data = yf.download(formatted_ticker, start=start_date, end=end_date, progress=False)
+            
+            if not data.empty:
+                data = clean_yahoo_data(data)
+                if len(data) > 0:
+                    fig = create_td_sequential_chart(data, formatted_ticker)
+                    if fig is not None:
+                        st.plotly_chart(fig, use_container_width=True)
+        except Exception as e:
+            st.error(f"Error analyzing {ticker_input}: {str(e)}")
     
-    # Create two columns for layout
-    left_col, right_col = st.columns([1, 3])
+    # PART 2: Dashboard Controls in Sidebar
+    st.sidebar.markdown("### HK Stocks Dashboard")
     
-    # PART 1: Single Stock Chart Analysis (Left Column)
-    with left_col:
-        st.markdown("### Single Stock Analysis")
-        if ticker_input:
-            try:
-                formatted_ticker = check_ticker_format(ticker_input)
-                st.write(f"Analyzing: {formatted_ticker}")
+    # Fetch stocks from GitHub
+    hk_stocks = get_stocks_from_github()
+    
+    if hk_stocks:
+        st.sidebar.write("Loaded stocks:", ", ".join(hk_stocks))
+        if st.sidebar.button("Refresh Dashboard"):
+            with st.spinner("Updating dashboard data..."):
+                dashboard_data = update_dashboard_data(hk_stocks)
                 
-                end_date = pd.Timestamp.today()
-                start_date = end_date - pd.DateOffset(years=1)
-                data = yf.download(formatted_ticker, start=start_date, end=end_date, progress=False)
-                
-                if not data.empty:
-                    data = clean_yahoo_data(data)
-                    if len(data) > 0:
-                        fig = create_td_sequential_chart(data, formatted_ticker)
-                        if fig is not None:
-                            st.plotly_chart(fig, use_container_width=True)
-            except Exception as e:
-                st.error(f"Error analyzing {ticker_input}: {str(e)}")
-    
-    # PART 2: Dashboard of HK Stocks (Right Column)
-    with right_col:
-        st.markdown("### HK Stocks Dashboard")
-        
-        # Fetch stocks from GitHub
-        hk_stocks = get_stocks_from_github()
-        
-        if hk_stocks:
-            if st.button("Refresh Dashboard"):
-                with st.spinner("Updating dashboard data..."):
-                    dashboard_data = update_dashboard_data(hk_stocks)
+                if dashboard_data:
+                    # Display dashboard in main area below the chart
+                    st.markdown("### HK Stocks Dashboard")
                     
-                    if dashboard_data:
-                        # Create DataFrame
-                        df = pd.DataFrame(dashboard_data)
-                        
-                        # Style the dataframe
-                        def highlight_phases(val):
-                            if isinstance(val, str) and val.isdigit():
-                                return 'background-color: #90EE90' if int(val) > 0 else ''
-                            return ''
-                        
-                        # Apply styling
-                        styled_df = df.style.apply(lambda x: [highlight_phases(v) for v in x])
-                        
-                        # Display the dashboard
-                        st.dataframe(styled_df, use_container_width=True)
-                        
-                        # Option to download as CSV
-                        csv = df.to_csv(index=False)
-                        st.download_button(
-                            label="Download Dashboard Data",
-                            data=csv,
-                            file_name="stock_phases.csv",
-                            mime="text/csv"
-                        )
-        else:
-            st.error("Could not fetch HK stocks list from GitHub")
+                    # Create DataFrame
+                    df = pd.DataFrame(dashboard_data)
+                    
+                    # Style the dataframe
+                    def highlight_phases(val):
+                        if isinstance(val, str) and val.isdigit():
+                            return 'background-color: #90EE90' if int(val) > 0 else ''
+                        return ''
+                    
+                    # Apply styling
+                    styled_df = df.style.apply(lambda x: [highlight_phases(v) for v in x])
+                    
+                    # Display the dashboard
+                    st.dataframe(styled_df, use_container_width=True)
+                    
+                    # Option to download as CSV
+                    st.download_button(
+                        label="Download Dashboard Data",
+                        data=csv,
+                        file_name="stock_phases.csv",
+                        mime="text/csv"
+                    )
+    else:
+        st.sidebar.error("Could not fetch HK stocks list from GitHub")
 
 if __name__ == "__main__":
     main()
