@@ -564,65 +564,6 @@ def create_td_sequential_chart(df, ticker):
     
     return fig
 
-def get_current_phase(df):
-    """Get the current phase numbers for a stock"""
-    buy_setup, sell_setup, buy_countdown, sell_countdown, _, _, _, _, _ = calculate_td_sequential(df)
-    
-    current_phases = {
-        'Buy Build Up': '-',
-        'Sell Build Up': '-',
-        'Buy Run Up': '-',
-        'Sell Run Up': '-'
-    }
-    
-    if len(buy_setup) > 0:
-        last_buy_setup = next((str(int(x)) for x in reversed(buy_setup) if x > 0), '-')
-        current_phases['Buy Build Up'] = last_buy_setup
-        
-    if len(sell_setup) > 0:
-        last_sell_setup = next((str(int(x)) for x in reversed(sell_setup) if x > 0), '-')
-        current_phases['Sell Build Up'] = last_sell_setup
-        
-    if len(buy_countdown) > 0:
-        last_buy_countdown = next((str(int(x)) for x in reversed(buy_countdown) if x > 0), '-')
-        current_phases['Buy Run Up'] = last_buy_countdown
-        
-    if len(sell_countdown) > 0:
-        last_sell_countdown = next((str(int(x)) for x in reversed(sell_countdown) if x > 0), '-')
-        current_phases['Sell Run Up'] = last_sell_countdown
-    
-    return current_phases
-
-def update_dashboard_data(stock_list):
-    """Update data for all stocks in the dashboard"""
-    dashboard_data = []
-    
-    for ticker in stock_list:
-        formatted_ticker = check_ticker_format(ticker)
-        try:
-            end_date = pd.Timestamp.today()
-            start_date = end_date - pd.DateOffset(days=30)
-            data = yf.download(formatted_ticker, start=start_date, end=end_date, progress=False)
-            
-            if not data.empty:
-                data = clean_yahoo_data(data)
-                if len(data) > 0:
-                    current_price = f"{data['Close'][-1]:.2f}"
-                    daily_change = f"{((data['Close'][-1] / data['Close'][-2] - 1) * 100):.2f}%"
-                    
-                    phases = get_current_phase(data)
-                    
-                    dashboard_data.append({
-                        'Stock': ticker,
-                        'Current Price': current_price,
-                        'Daily Change': daily_change,
-                        **phases
-                    })
-        except Exception as e:
-            st.error(f"Error processing {ticker}: {str(e)}")
-    
-    return dashboard_data
-
 def main():
     # Initialize session state if not exists
     if 'dashboard_data' not in st.session_state:
@@ -664,28 +605,30 @@ def main():
                       'Buy Build Up', 'Buy Run Up', 'Sell Build Up', 'Sell Run Up']
             df = df[columns]
             
-            # Define the styling function
+            # Define the styling function with larger font sizes
             def style_phases(x):
                 styles = pd.Series([''] * len(x), index=x.index)
                 
+                # Style for Build Up phases (9) - increased font size
                 if x.name in ['Buy Build Up', 'Sell Build Up']:
                     mask = x == '9'
-                    styles[mask] = 'font-weight: bold; color: green; font-size: 16px'
+                    styles[mask] = 'font-weight: 900; color: #00FF00; font-size: 20px'  # Bolder weight, brighter green, larger size
                 
+                # Style for Run Up phases (13) - increased font size
                 if x.name in ['Buy Run Up', 'Sell Run Up']:
                     mask = x == '13'
-                    styles[mask] = 'font-weight: bold; color: red; font-size: 16px'
+                    styles[mask] = 'font-weight: 900; color: #FF0000; font-size: 20px'  # Bolder weight, brighter red, larger size
                     
                 return styles
             
             # Apply the styling
             styled_df = df.style.apply(style_phases)
             
-            # Display the dashboard
+            # Display the dashboard with increased row height to accommodate larger font
             st.dataframe(
                 styled_df,
                 use_container_width=True,
-                height=(len(df) + 1) * 35
+                height=(len(df) + 1) * 40  # Increased row height to accommodate larger font
             )
             
             # Generate CSV for download button
