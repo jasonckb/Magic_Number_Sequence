@@ -675,10 +675,7 @@ def create_summary_section(df):
     return summary_df
 
 def main():
-
-    # Page Configuration
-    st.set_page_config(layout="wide", page_title="Magic Number Sequence")
-    st.title("Magic Number Sequence by Jason Chan")
+    
     # Initialize session state if not exists
     if 'dashboard_data' not in st.session_state:
         st.session_state.dashboard_data = None
