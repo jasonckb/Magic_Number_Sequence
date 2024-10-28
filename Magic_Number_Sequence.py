@@ -7,7 +7,7 @@ import requests
 from datetime import datetime, timedelta
 
 # Page Configuration
-st.set_page_config(layout="wide")
+st.set_page_config(layout="wide", page_title="Magic Number Sequence")
 st.title("Magic Number Sequence by Jason Chan")
 
 # Sidebar input
@@ -25,91 +25,24 @@ def get_stocks_from_github():
         st.error(f"Error fetching stocks from GitHub: {str(e)}")
         return []
 
-def get_current_phase(df):
-    """Get the current phase numbers for a stock"""
-    buy_setup, sell_setup, buy_countdown, sell_countdown, _, _, _, _, _ = calculate_td_sequential(df)
-    
-    # Get the last non-zero values
-    current_phases = {
-        'Buy Build Up': '-',
-        'Sell Build Up': '-',
-        'Buy Run Up': '-',
-        'Sell Run Up': '-'
-    }
-    
-    # Get the most recent non-zero values for each phase
-    if len(buy_setup) > 0:
-        last_buy_setup = next((str(int(x)) for x in reversed(buy_setup) if x > 0), '-')
-        current_phases['Buy Build Up'] = last_buy_setup
-        
-    if len(sell_setup) > 0:
-        last_sell_setup = next((str(int(x)) for x in reversed(sell_setup) if x > 0), '-')
-        current_phases['Sell Build Up'] = last_sell_setup
-        
-    if len(buy_countdown) > 0:
-        last_buy_countdown = next((str(int(x)) for x in reversed(buy_countdown) if x > 0), '-')
-        current_phases['Buy Run Up'] = last_buy_countdown
-        
-    if len(sell_countdown) > 0:
-        last_sell_countdown = next((str(int(x)) for x in reversed(sell_countdown) if x > 0), '-')
-        current_phases['Sell Run Up'] = last_sell_countdown
-    
-    return current_phases
-
-def update_dashboard_data(stock_list):
-    """Update data for all stocks in the dashboard"""
-    dashboard_data = []
-    
-    for ticker in stock_list:
-        formatted_ticker = check_ticker_format(ticker)
-        try:
-            end_date = pd.Timestamp.today()
-            start_date = end_date - pd.DateOffset(days=30)
-            data = yf.download(formatted_ticker, start=start_date, end=end_date, progress=False)
-            
-            if not data.empty:
-                data = clean_yahoo_data(data)
-                if len(data) > 0:
-                    current_price = f"{data['Close'][-1]:.2f}"
-                    daily_change = f"{((data['Close'][-1] / data['Close'][-2] - 1) * 100):.2f}%"
-                    
-                    phases = get_current_phase(data)
-                    
-                    dashboard_data.append({
-                        'Stock': ticker,
-                        'Current Price': current_price,
-                        'Daily Change': daily_change,
-                        **phases
-                    })
-                    
-        except Exception as e:
-            st.error(f"Error processing {ticker}: {str(e)}")
-    
-    return dashboard_data
-
 def check_ticker_format(ticker):
+    """Format ticker symbol for Hong Kong stocks"""
     if ticker.isdigit():
         return ticker.zfill(4) + ".HK"
     return ticker.upper()
 
 def clean_yahoo_data(df):
+    """Clean and format Yahoo Finance data"""
     try:
-        # Handle multi-level columns
         if isinstance(df.columns, pd.MultiIndex):
-            # Get the first level of column names and the ticker
             base_cols = df.columns.get_level_values(0).unique()
-            ticker = df.columns.get_level_values(1)[0]  # Get ticker from any column
-            
-            # Create a new dataframe with single-level columns
+            ticker = df.columns.get_level_values(1)[0]
             df_cleaned = pd.DataFrame(index=df.index)
             for col in base_cols:
                 df_cleaned[col] = df[(col, ticker)]
         else:
             df_cleaned = df.copy()
-        
-        # Drop any rows with missing values
         df_cleaned = df_cleaned.dropna(subset=['Open', 'High', 'Low', 'Close'])
-        
         return df_cleaned
     except Exception as e:
         st.error(f"Error in data cleaning: {str(e)}")
@@ -145,12 +78,14 @@ def safe_minmax(values, operation='min'):
 
 # TD Sequential Check Functions
 def check_buy_flip(df, i):
+    """Check for valid buy price flip"""
     if i < 5:
         return False
     return safe_compare(df['Close'].iloc[i], df['Close'].iloc[i-4], '<') and \
            safe_compare(df['Close'].iloc[i-1], df['Close'].iloc[i-5], '>')
 
 def check_sell_flip(df, i):
+    """Check for valid sell price flip"""
     if i < 5:
         return False
     return safe_compare(df['Close'].iloc[i], df['Close'].iloc[i-4], '>') and \
@@ -190,6 +125,23 @@ def get_tdst_level(df, setup_start_idx, end_idx, is_buy_setup):
         lowest_low = safe_minmax(df['Low'].iloc[setup_start_idx:end_idx+1], 'min')
         return safe_minmax([prior_close, lowest_low], 'min')
 
+def check_bar8_rule(df, current_idx, bar8_idx, is_buy_countdown):
+    if is_buy_countdown:
+        return safe_compare(df['Low'].iloc[current_idx], df['Close'].iloc[bar8_idx], '<=')
+    else:
+        return safe_compare(df['High'].iloc[current_idx], df['Close'].iloc[bar8_idx], '>=')
+
+def check_18_bar_rule(df, current_idx, last_flip_idx, is_buy_countdown):
+    if last_flip_idx < 0 or current_idx - last_flip_idx < 18:
+        return False
+    
+    for i in range(last_flip_idx, current_idx + 1):
+        if is_buy_countdown and check_buy_flip(df, i):
+            return False
+        elif not is_buy_countdown and check_sell_flip(df, i):
+            return False
+    return True
+
 class TDSTLevels:
     def __init__(self):
         self.resistance_levels = []
@@ -214,31 +166,6 @@ class TDSTLevels:
         if self.active_support is not None:
             return safe_compare(price, self.active_support, '<')
         return False
-
-def check_bar8_rule(df, current_idx, bar8_idx, is_buy_countdown):
-    """Helper function to check if bar 8 rule is met"""
-    if is_buy_countdown:
-        return safe_compare(df['Low'].iloc[current_idx], df['Close'].iloc[bar8_idx], '<=')
-    else:
-        return safe_compare(df['High'].iloc[current_idx], df['Close'].iloc[bar8_idx], '>=')
-
-def check_18_bar_rule(df, current_idx, last_flip_idx, is_buy_countdown):
-    """
-    Helper function to check 18-bar rule:
-    - For buy countdown: checks if no buy flip in last 18 bars after sell flip
-    - For sell countdown: checks if no sell flip in last 18 bars after buy flip
-    Returns True if countdown should be cancelled
-    """
-    if last_flip_idx < 0 or current_idx - last_flip_idx < 18:
-        return False
-        
-    # Check if no same-direction flip in last 18 bars
-    for i in range(last_flip_idx, current_idx + 1):
-        if is_buy_countdown and check_buy_flip(df, i):
-            return False
-        elif not is_buy_countdown and check_sell_flip(df, i):
-            return False
-    return True
 
 def calculate_td_sequential(df):
     # Initialize arrays
@@ -321,27 +248,25 @@ def calculate_td_sequential(df):
             bar8_close_sell = None
             sell_plus_without_setup = False
         
-        # Track if setup 1 occurs at this bar
-        setup_one_at_current_bar = False
-        
-        # Track if setup 1 occurs at this bar
+        # Track if setup completes on this bar
+        buy_setup_completed_this_bar = False
+        sell_setup_completed_this_bar = False
         setup_one_at_current_bar = False
         
         # Buy Setup Phase
-        if check_buy_flip(df, i):
-            # Allow setup 1 if:
-            # - No plus seen, OR
-            # - This bar has buy plus or buy 13
+        if check_buy_flip(df, i):  # Valid buy price flip
             if (not buy_plus_without_setup or 
-                (buy_deferred[i] or  # Has plus on this bar
-                 (waiting_for_buy_13 and safe_compare(df['Low'].iloc[i], bar8_close_buy, '<=')))):  # Has bar 13 on this bar
+                (buy_deferred[i] or  
+                 (waiting_for_buy_13 and safe_compare(df['Low'].iloc[i], bar8_close_buy, '<=')))):
                 buy_setup_active = True
-                sell_setup_active = False
+                sell_setup_active = False  # Cancel any active sell setup
                 setup_start_idx = i
                 buy_setup[i] = 1
                 setup_one_at_current_bar = True
+                # Clear any existing sell setup counts
+                if i > 0 and sell_setup[i-1] > 0:
+                    sell_setup[i-1] = 0
         elif buy_setup_active:
-            # Check if setup should continue
             if check_buy_setup(df, i):
                 if i > 0 and buy_setup[i-1] > 0:
                     current_count = buy_setup[i-1] + 1
@@ -352,33 +277,31 @@ def calculate_td_sequential(df):
                                 buy_perfection[i] = 1
                             buy_setup_active = False
                             buy_setup_complete = True
+                            buy_setup_completed_this_bar = True
                             need_new_buy_setup = False
                             resistance = get_tdst_level(df, setup_start_idx, i, True)
                             tdst.add_resistance(resistance, df.index[i])
                 else:
                     buy_setup[i] = 1
             else:
-                # Clear interrupted setup
                 buy_setup_active = False
-                # Only clear if we've had 4 bars without continuation
                 if i - setup_start_idx >= 4:
                     buy_setup[setup_start_idx:i+1] = 0
         
         # Sell Setup Phase
-        if check_sell_flip(df, i):
-            # Allow setup 1 if:
-            # - No plus seen, OR
-            # - This bar has sell plus or sell 13
+        if check_sell_flip(df, i):  # Valid sell price flip
             if (not sell_plus_without_setup or 
-                (sell_deferred[i] or  # Has plus on this bar
-                 (waiting_for_sell_13 and safe_compare(df['High'].iloc[i], bar8_close_sell, '>=')))):  # Has bar 13 on this bar
+                (sell_deferred[i] or  
+                 (waiting_for_sell_13 and safe_compare(df['High'].iloc[i], bar8_close_sell, '>=')))):
                 sell_setup_active = True
-                buy_setup_active = False
+                buy_setup_active = False  # Cancel any active buy setup
                 setup_start_idx = i
                 sell_setup[i] = 1
                 setup_one_at_current_bar = True
+                # Clear any existing buy setup counts
+                if i > 0 and buy_setup[i-1] > 0:
+                    buy_setup[i-1] = 0
         elif sell_setup_active:
-            # Check if setup should continue
             if check_sell_setup(df, i):
                 if i > 0 and sell_setup[i-1] > 0:
                     current_count = sell_setup[i-1] + 1
@@ -389,22 +312,21 @@ def calculate_td_sequential(df):
                                 sell_perfection[i] = 1
                             sell_setup_active = False
                             sell_setup_complete = True
+                            sell_setup_completed_this_bar = True
                             need_new_sell_setup = False
                             support = get_tdst_level(df, setup_start_idx, i, False)
                             tdst.add_support(support, df.index[i])
                 else:
                     sell_setup[i] = 1
             else:
-                # Clear interrupted setup
                 sell_setup_active = False
-                # Only clear if we've had 4 bars without continuation
                 if i - setup_start_idx >= 4:
                     sell_setup[setup_start_idx:i+1] = 0
         
-        # Buy Countdown Phase - Only if no sell countdown active
+        # Buy Countdown Phase
         if not sell_countdown_active:
-            if buy_setup_complete and not buy_countdown_active and not need_new_buy_setup:
-                if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
+            if (buy_setup_completed_this_bar or buy_setup_complete) and not buy_countdown_active and not need_new_buy_setup:
+                if i >= 2 and safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
                     buy_countdown_active = True
                     buy_setup_complete = False
                     buy_countdown[i] = 1
@@ -412,19 +334,16 @@ def calculate_td_sequential(df):
                     buy_countdown_bars = [i]
                     waiting_for_buy_13 = False
                     bar8_close_buy = None
-                    
             elif buy_countdown_active:
                 if waiting_for_buy_13:
-                    # For bar 13, only check bar 8 rule
                     if safe_compare(df['Low'].iloc[i], bar8_close_buy, '<='):
                         buy_countdown[i] = 13
                         buy_countdown_active = False
                         waiting_for_buy_13 = False
                         bar8_close_buy = None
                         need_new_buy_setup = True
-                        buy_plus_without_setup = False  # Reset plus prevention on bar 13
+                        buy_plus_without_setup = False
                     else:
-                        # For '+', still need 2-bar rule
                         if safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
                             buy_deferred[i] = True
                             if not setup_one_at_current_bar:
@@ -440,10 +359,10 @@ def calculate_td_sequential(df):
                             elif buy_setup_count == 12:
                                 waiting_for_buy_13 = True
         
-        # Sell Countdown Phase - Only if no buy countdown active
+        # Sell Countdown Phase
         if not buy_countdown_active:
-            if sell_setup_complete and not sell_countdown_active and not need_new_sell_setup:
-                if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
+            if (sell_setup_completed_this_bar or sell_setup_complete) and not sell_countdown_active and not need_new_sell_setup:
+                if i >= 2 and safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
                     sell_countdown_active = True
                     sell_setup_complete = False
                     sell_countdown[i] = 1
@@ -451,19 +370,16 @@ def calculate_td_sequential(df):
                     sell_countdown_bars = [i]
                     waiting_for_sell_13 = False
                     bar8_close_sell = None
-                    
             elif sell_countdown_active:
                 if waiting_for_sell_13:
-                    # For bar 13, only check bar 8 rule
                     if safe_compare(df['High'].iloc[i], bar8_close_sell, '>='):
                         sell_countdown[i] = 13
                         sell_countdown_active = False
                         waiting_for_sell_13 = False
                         bar8_close_sell = None
                         need_new_sell_setup = True
-                        sell_plus_without_setup = False  # Reset plus prevention on bar 13
+                        sell_plus_without_setup = False
                     else:
-                        # For '+', still need 2-bar rule
                         if safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
                             sell_deferred[i] = True
                             if not setup_one_at_current_bar:
@@ -648,8 +564,67 @@ def create_td_sequential_chart(df, ticker):
     
     return fig
 
+def get_current_phase(df):
+    """Get the current phase numbers for a stock"""
+    buy_setup, sell_setup, buy_countdown, sell_countdown, _, _, _, _, _ = calculate_td_sequential(df)
+    
+    current_phases = {
+        'Buy Build Up': '-',
+        'Sell Build Up': '-',
+        'Buy Run Up': '-',
+        'Sell Run Up': '-'
+    }
+    
+    if len(buy_setup) > 0:
+        last_buy_setup = next((str(int(x)) for x in reversed(buy_setup) if x > 0), '-')
+        current_phases['Buy Build Up'] = last_buy_setup
+        
+    if len(sell_setup) > 0:
+        last_sell_setup = next((str(int(x)) for x in reversed(sell_setup) if x > 0), '-')
+        current_phases['Sell Build Up'] = last_sell_setup
+        
+    if len(buy_countdown) > 0:
+        last_buy_countdown = next((str(int(x)) for x in reversed(buy_countdown) if x > 0), '-')
+        current_phases['Buy Run Up'] = last_buy_countdown
+        
+    if len(sell_countdown) > 0:
+        last_sell_countdown = next((str(int(x)) for x in reversed(sell_countdown) if x > 0), '-')
+        current_phases['Sell Run Up'] = last_sell_countdown
+    
+    return current_phases
+
+def update_dashboard_data(stock_list):
+    """Update data for all stocks in the dashboard"""
+    dashboard_data = []
+    
+    for ticker in stock_list:
+        formatted_ticker = check_ticker_format(ticker)
+        try:
+            end_date = pd.Timestamp.today()
+            start_date = end_date - pd.DateOffset(days=30)
+            data = yf.download(formatted_ticker, start=start_date, end=end_date, progress=False)
+            
+            if not data.empty:
+                data = clean_yahoo_data(data)
+                if len(data) > 0:
+                    current_price = f"{data['Close'][-1]:.2f}"
+                    daily_change = f"{((data['Close'][-1] / data['Close'][-2] - 1) * 100):.2f}%"
+                    
+                    phases = get_current_phase(data)
+                    
+                    dashboard_data.append({
+                        'Stock': ticker,
+                        'Current Price': current_price,
+                        'Daily Change': daily_change,
+                        **phases
+                    })
+        except Exception as e:
+            st.error(f"Error processing {ticker}: {str(e)}")
+    
+    return dashboard_data
+
 def main():
-    # PART 1: Single Stock Chart Analysis in Main Area
+    # PART 1: Single Stock Chart Analysis
     st.markdown("### Single Stock Analysis")
     if ticker_input:
         try:
@@ -697,7 +672,7 @@ def main():
                 st.dataframe(
                     styled_df,
                     use_container_width=True,
-                    height=(len(df) + 1) * 35  # Adjust height based on number of rows
+                    height=(len(df) + 1) * 35
                 )
                 
                 # Generate CSV for download button
@@ -713,3 +688,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
