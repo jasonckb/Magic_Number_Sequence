@@ -663,12 +663,12 @@ def main():
                 # Style for Build Up phases (9) - increased font size
                 if x.name in ['Buy Build Up', 'Sell Build Up']:
                     mask = x == '9'
-                    styles[mask] = 'font-weight: 900; color: green; font-size: 20px'
+                    styles[mask] = 'font-weight: 900; color: #00FF00; font-size: 20px'
                 
                 # Style for Run Up phases (13) - increased font size
                 if x.name in ['Buy Run Up', 'Sell Run Up']:
                     mask = x == '13'
-                    styles[mask] = 'font-weight: 900; color:red; font-size: 20px'
+                    styles[mask] = 'font-weight: 900; color: #FF0000; font-size: 20px'
                     
                 return styles
             
