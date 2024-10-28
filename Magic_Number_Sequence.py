@@ -6,24 +6,36 @@ import numpy as np
 import requests
 from datetime import datetime, timedelta
 
-# Page Configuration
-st.set_page_config(layout="wide", page_title="Magic Number Sequence")
-st.title("Magic Number Sequence by Jason Chan")
 
-# Sidebar input
-ticker_input = st.sidebar.text_input("Enter ticker", "AAPL")
-
-def get_stocks_from_github():
-    """Fetch stock list from GitHub"""
+def get_stocks_from_github(asset_type):
+    """Fetch stock list from GitHub based on asset type"""
+    urls = {
+        "HK Stocks": "https://raw.githubusercontent.com/jasonckb/Magic_Sequence/main/HK%20Stocks.txt",
+        "US Stocks": "https://raw.githubusercontent.com/jasonckb/Magic_Sequence/main/US%20Stocks.txt",
+        "World Index": "https://raw.githubusercontent.com/jasonckb/Magic_Sequence/main/World%20Index.txt"
+    }
+    
     try:
-        github_url = "https://raw.githubusercontent.com/jasonckb/Magic_Number_Sequence/main/HK%20Stocks.txt"
+        github_url = urls[asset_type]
         response = requests.get(github_url)
         response.raise_for_status()
         stocks = [line.strip() for line in response.text.splitlines() if line.strip()]
         return stocks
-    except Exception as e:
-        st.error(f"Error fetching stocks from GitHub: {str(e)}")
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            st.error(f"""
+                Could not fetch {asset_type} list from GitHub. 
+                This might be because the repository is private. 
+                Please ensure the repository is public or provide an alternative data source.
+                Error: {str(e)}
+            """)
+        else:
+            st.error(f"Error fetching {asset_type} from GitHub: {str(e)}")
         return []
+    except Exception as e:
+        st.error(f"Error fetching {asset_type} from GitHub: {str(e)}")
+        return []
+
 
 def check_ticker_format(ticker):
     """Format ticker symbol for Hong Kong stocks"""
@@ -48,8 +60,8 @@ def clean_yahoo_data(df):
         st.error(f"Error in data cleaning: {str(e)}")
         return pd.DataFrame()
 
-# Comparison Helper Functions
 def safe_compare(a, b, operator='<='):
+    """Safe comparison of values"""
     try:
         a_val = float(a)
         b_val = float(b)
@@ -67,6 +79,7 @@ def safe_compare(a, b, operator='<='):
         return False
 
 def safe_minmax(values, operation='min'):
+    """Safe min/max calculation"""
     try:
         float_values = [float(v) for v in values]
         if operation == 'min':
@@ -115,16 +128,6 @@ def check_sell_perfection(df, setup_start, i):
     bar6_7_high = safe_minmax([df['High'].iloc[i-3], df['High'].iloc[i-2]], 'max')
     return safe_compare(bar8_9_high, bar6_7_high, '>=')
 
-def get_tdst_level(df, setup_start_idx, end_idx, is_buy_setup):
-    if is_buy_setup:
-        prior_close = float(df['Close'].iloc[setup_start_idx-1]) if setup_start_idx > 0 else float('-inf')
-        highest_high = safe_minmax(df['High'].iloc[setup_start_idx:end_idx+1], 'max')
-        return safe_minmax([prior_close, highest_high], 'max')
-    else:
-        prior_close = float(df['Close'].iloc[setup_start_idx-1]) if setup_start_idx > 0 else float('inf')
-        lowest_low = safe_minmax(df['Low'].iloc[setup_start_idx:end_idx+1], 'min')
-        return safe_minmax([prior_close, lowest_low], 'min')
-
 def check_bar8_rule(df, current_idx, bar8_idx, is_buy_countdown):
     if is_buy_countdown:
         return safe_compare(df['Low'].iloc[current_idx], df['Close'].iloc[bar8_idx], '<=')
@@ -167,7 +170,18 @@ class TDSTLevels:
             return safe_compare(price, self.active_support, '<')
         return False
 
+def get_tdst_level(df, setup_start_idx, end_idx, is_buy_setup):
+    if is_buy_setup:
+        prior_close = float(df['Close'].iloc[setup_start_idx-1]) if setup_start_idx > 0 else float('-inf')
+        highest_high = safe_minmax(df['High'].iloc[setup_start_idx:end_idx+1], 'max')
+        return safe_minmax([prior_close, highest_high], 'max')
+    else:
+        prior_close = float(df['Close'].iloc[setup_start_idx-1]) if setup_start_idx > 0 else float('inf')
+        lowest_low = safe_minmax(df['Low'].iloc[setup_start_idx:end_idx+1], 'min')
+        return safe_minmax([prior_close, lowest_low], 'min')
+
 def calculate_td_sequential(df):
+    """Main TD Sequential calculation function"""
     # Initialize arrays
     buy_setup = np.zeros(len(df))
     sell_setup = np.zeros(len(df))
@@ -397,92 +411,28 @@ def calculate_td_sequential(df):
     
     return buy_setup, sell_setup, buy_countdown, sell_countdown, buy_perfection, sell_perfection, buy_deferred, sell_deferred, tdst
 
-def create_td_sequential_chart(df, ticker):
-    if df.empty:
-        return None
-        
+def create_td_sequential_chart(data, formatted_ticker):
+    """Create interactive chart with TD Sequential indicators"""
     # Calculate TD Sequential indicators
     buy_setup, sell_setup, buy_countdown, sell_countdown, buy_perfection, \
-    sell_perfection, buy_deferred, sell_deferred, tdst = calculate_td_sequential(df)
+    sell_perfection, buy_deferred, sell_deferred, tdst = calculate_td_sequential(data)
     
     # Create base figure with candlesticks
     fig = go.Figure(data=[
         go.Candlestick(
-            x=df.index,
-            open=df['Open'],
-            high=df['High'],
-            low=df['Low'],
-            close=df['Close'],
+            x=data.index,
+            open=data['Open'],
+            high=data['High'],
+            low=data['Low'],
+            close=data['Close'],
             name='OHLC',
             increasing_line_color='#26A69A',
             decreasing_line_color='#EF5350'
         )
     ])
-    
-    # Calculate y-axis range
-    y_min = float(df['Low'].min())
-    y_max = float(df['High'].max())
-    y_padding = (y_max - y_min) * 0.1
-    
-    # Add TrendLine levels
-    for i, (level, date) in enumerate(tdst.resistance_levels):
-        if date in df.index:
-            date_idx = df.index.get_loc(date)
-            end_idx = min(date_idx + 30, len(df.index) - 1)
-            end_date = df.index[end_idx]
-            
-            # Add horizontal line
-            fig.add_shape(
-                type="line",
-                x0=date,
-                x1=end_date,
-                y0=float(level),
-                y1=float(level),
-                line=dict(color="red", width=1, dash="dash"),
-                layer="below"
-            )
-            
-            # Add label
-            fig.add_annotation(
-                x=end_date,
-                y=float(level),
-                text=f"TrendLine R{len(tdst.resistance_levels)-i}",
-                showarrow=False,
-                xanchor="left",
-                xshift=10,
-                font=dict(color="red", size=10)
-            )
-    
-    for i, (level, date) in enumerate(tdst.support_levels):
-        if date in df.index:
-            date_idx = df.index.get_loc(date)
-            end_idx = min(date_idx + 30, len(df.index) - 1)
-            end_date = df.index[end_idx]
-            
-            # Add horizontal line
-            fig.add_shape(
-                type="line",
-                x0=date,
-                x1=end_date,
-                y0=float(level),
-                y1=float(level),
-                line=dict(color="green", width=1, dash="dash"),
-                layer="below"
-            )
-            
-            # Add label
-            fig.add_annotation(
-                x=end_date,
-                y=float(level),
-                text=f"TrendLine S{len(tdst.support_levels)-i}",
-                showarrow=False,
-                xanchor="left",
-                xshift=10,
-                font=dict(color="green", size=10)
-            )
-    
-    # Add setup and countdown annotations
-    for i in range(len(df)):
+
+    # Add annotations for TD Sequential numbers
+    for i in range(len(data)):
         # Buy setup counts
         if buy_setup[i] > 0:
             count_text = str(int(buy_setup[i]))
@@ -490,8 +440,8 @@ def create_td_sequential_chart(df, ticker):
             if buy_setup[i] == 9:
                 count_text += "↑" if buy_perfection[i] else "+"
             fig.add_annotation(
-                x=df.index[i],
-                y=float(df['Low'].iloc[i]),
+                x=data.index[i],
+                y=float(data['Low'].iloc[i]),
                 text=count_text,
                 showarrow=False,
                 yshift=-10,
@@ -503,8 +453,8 @@ def create_td_sequential_chart(df, ticker):
             count_text = "+" if buy_deferred[i] else str(int(buy_countdown[i]))
             font_size = 13 if buy_countdown[i] == 13 else 10
             fig.add_annotation(
-                x=df.index[i],
-                y=float(df['Low'].iloc[i]),
+                x=data.index[i],
+                y=float(data['Low'].iloc[i]),
                 text=count_text,
                 showarrow=False,
                 yshift=-25,
@@ -518,8 +468,8 @@ def create_td_sequential_chart(df, ticker):
             if sell_setup[i] == 9:
                 count_text += "↓" if sell_perfection[i] else "+"
             fig.add_annotation(
-                x=df.index[i],
-                y=float(df['High'].iloc[i]),
+                x=data.index[i],
+                y=float(data['High'].iloc[i]),
                 text=count_text,
                 showarrow=False,
                 yshift=10,
@@ -531,17 +481,74 @@ def create_td_sequential_chart(df, ticker):
             count_text = "+" if sell_deferred[i] else str(int(sell_countdown[i]))
             font_size = 13 if sell_countdown[i] == 13 else 10
             fig.add_annotation(
-                x=df.index[i],
-                y=float(df['High'].iloc[i]),
+                x=data.index[i],
+                y=float(data['High'].iloc[i]),
                 text=count_text,
                 showarrow=False,
                 yshift=25,
                 font=dict(color="red", size=font_size)
             )
-    
+
+    # Add TDST levels
+    for i, (level, date) in enumerate(tdst.resistance_levels):
+        if date in data.index:
+            date_idx = data.index.get_loc(date)
+            end_idx = min(date_idx + 30, len(data.index) - 1)
+            end_date = data.index[end_idx]
+            
+            fig.add_shape(
+                type="line",
+                x0=date,
+                x1=end_date,
+                y0=float(level),
+                y1=float(level),
+                line=dict(color="red", width=1, dash="dash"),
+                layer="below"
+            )
+            
+            fig.add_annotation(
+                x=end_date,
+                y=float(level),
+                text=f"TrendLine R{len(tdst.resistance_levels)-i}",
+                showarrow=False,
+                xanchor="left",
+                xshift=10,
+                font=dict(color="red", size=10)
+            )
+
+    for i, (level, date) in enumerate(tdst.support_levels):
+        if date in data.index:
+            date_idx = data.index.get_loc(date)
+            end_idx = min(date_idx + 30, len(data.index) - 1)
+            end_date = data.index[end_idx]
+            
+            fig.add_shape(
+                type="line",
+                x0=date,
+                x1=end_date,
+                y0=float(level),
+                y1=float(level),
+                line=dict(color="green", width=1, dash="dash"),
+                layer="below"
+            )
+            
+            fig.add_annotation(
+                x=end_date,
+                y=float(level),
+                text=f"TrendLine S{len(tdst.support_levels)-i}",
+                showarrow=False,
+                xanchor="left",
+                xshift=10,
+                font=dict(color="green", size=10)
+            )
+
     # Update layout
+    y_min = float(data['Low'].min())
+    y_max = float(data['High'].max())
+    y_padding = (y_max - y_min) * 0.1
+
     fig.update_layout(
-        title=f'Magic Number Sequence Analysis - {ticker}',
+        title=f'Magic Number Sequence Analysis - {formatted_ticker}',
         yaxis=dict(
             title='Price',
             range=[y_min - y_padding, y_max + y_padding],
@@ -561,8 +568,90 @@ def create_td_sequential_chart(df, ticker):
         plot_bgcolor='white',
         margin=dict(l=50, r=50, t=50, b=50)
     )
-    
+
     return fig
+
+def get_current_phase(df):
+    """Get the current phase numbers for a stock"""
+    buy_setup, sell_setup, buy_countdown, sell_countdown, _, _, _, _, _ = calculate_td_sequential(df)
+    
+    current_phases = {
+        'Buy Build Up': '-',
+        'Sell Build Up': '-',
+        'Buy Run Up': '-',
+        'Sell Run Up': '-'
+    }
+    
+    if len(buy_setup) > 0:
+        last_buy_setup = next((str(int(x)) for x in reversed(buy_setup) if x > 0), '-')
+        current_phases['Buy Build Up'] = last_buy_setup
+        
+    if len(sell_setup) > 0:
+        last_sell_setup = next((str(int(x)) for x in reversed(sell_setup) if x > 0), '-')
+        current_phases['Sell Build Up'] = last_sell_setup
+        
+    if len(buy_countdown) > 0:
+        last_buy_countdown = next((str(int(x)) for x in reversed(buy_countdown) if x > 0), '-')
+        current_phases['Buy Run Up'] = last_buy_countdown
+        
+    if len(sell_countdown) > 0:
+        last_sell_countdown = next((str(int(x)) for x in reversed(sell_countdown) if x > 0), '-')
+        current_phases['Sell Run Up'] = last_sell_countdown
+    
+    return current_phases
+
+def update_dashboard_data(stock_list):
+    """Update data for all stocks in the dashboard"""
+    dashboard_data = []
+    
+    for ticker in stock_list:
+        formatted_ticker = check_ticker_format(ticker)
+        try:
+            end_date = pd.Timestamp.today()
+            start_date = end_date - pd.DateOffset(days=30)
+            data = yf.download(formatted_ticker, start=start_date, end=end_date, progress=False)
+            
+            if not data.empty:
+                data = clean_yahoo_data(data)
+                if len(data) > 0:
+                    current_price = f"{data['Close'][-1]:.2f}"
+                    daily_change = f"{((data['Close'][-1] / data['Close'][-2] - 1) * 100):.2f}%"
+                    
+                    phases = get_current_phase(data)
+                    
+                    dashboard_data.append({
+                        'Stock': ticker,
+                        'Current Price': current_price,
+                        'Daily Change': daily_change,
+                        **phases
+                    })
+        except Exception as e:
+            st.error(f"Error processing {ticker}: {str(e)}")
+    
+    return dashboard_data
+
+def create_summary_section(df):
+    """Create summary section for 9s and 13s"""
+    # Filter stocks with specific values
+    build_up_9_buy = df[df['Buy Build Up'] == '9']['Stock'].tolist()
+    build_up_9_sell = df[df['Sell Build Up'] == '9']['Stock'].tolist()
+    run_up_13_buy = df[df['Buy Run Up'] == '13']['Stock'].tolist()
+    run_up_13_sell = df[df['Sell Run Up'] == '13']['Stock'].tolist()
+    
+    # Create summary DataFrame
+    summary_data = {
+        'Build Up (9)': {
+            'Buy': ', '.join(build_up_9_buy) if build_up_9_buy else '-',
+            'Sell': ', '.join(build_up_9_sell) if build_up_9_sell else '-'
+        },
+        'Run Up (13)': {
+            'Buy': ', '.join(run_up_13_buy) if run_up_13_buy else '-',
+            'Sell': ', '.join(run_up_13_sell) if run_up_13_sell else '-'
+        }
+    }
+    
+    summary_df = pd.DataFrame(summary_data)
+    return summary_df
 
 def main():
     # Initialize session state if not exists
@@ -570,132 +659,119 @@ def main():
         st.session_state.dashboard_data = None
     if 'last_ticker' not in st.session_state:
         st.session_state.last_ticker = None
+    if 'asset_type' not in st.session_state:
+        st.session_state.asset_type = "HK Stocks"
+    
+    # Sidebar Configuration
+    st.sidebar.title("Controls")
+    ticker_input = st.sidebar.text_input("Enter ticker", "AAPL", key="ticker_input_box")
+    asset_type = st.sidebar.selectbox(
+        "Asset Dashboard Option",
+        ["HK Stocks", "US Stocks", "World Index"],
+        key="asset_type_selector"
+    )
+    refresh_button = st.sidebar.button("Refresh Dashboard", key="refresh_button")
+    
+    # Reset dashboard data if asset type changes
+    if asset_type != st.session_state.asset_type:
+        st.session_state.dashboard_data = None
+        st.session_state.asset_type = asset_type
     
     # PART 1: Single Stock Chart Analysis
     st.markdown("### Single Stock Analysis")
-    
-    # Only refresh chart if ticker changed
-    if ticker_input != st.session_state.last_ticker:
-        st.session_state.last_ticker = ticker_input
-        if ticker_input:
-            try:
-                formatted_ticker = check_ticker_format(ticker_input)
-                st.write(f"Analyzing: {formatted_ticker}")
-                
-                end_date = pd.Timestamp.today()
-                start_date = end_date - pd.DateOffset(years=1)
-                data = yf.download(formatted_ticker, start=start_date, end=end_date, progress=False)
-                
-                if not data.empty:
-                    data = clean_yahoo_data(data)
-                    if len(data) > 0:
-                        fig = create_td_sequential_chart(data, formatted_ticker)
-                        if fig is not None:
-                            st.plotly_chart(fig, use_container_width=True)
-                            
-                            # Store the chart data in session state
-                            st.session_state.last_chart_data = data
-                            st.session_state.last_chart_fig = fig
-            except Exception as e:
-                st.error(f"Error analyzing {ticker_input}: {str(e)}")
-    else:
-        # Re-display existing chart without recalculation
-        if ticker_input:
+    if ticker_input:
+        try:
             formatted_ticker = check_ticker_format(ticker_input)
             st.write(f"Analyzing: {formatted_ticker}")
             
-            # Check if we have stored chart data
-            if hasattr(st.session_state, 'last_chart_fig') and st.session_state.last_chart_fig is not None:
-                st.plotly_chart(st.session_state.last_chart_fig, use_container_width=True)
-            else:
-                # Regenerate if not stored
-                try:
-                    end_date = pd.Timestamp.today()
-                    start_date = end_date - pd.DateOffset(years=1)
-                    data = yf.download(formatted_ticker, start=start_date, end=end_date, progress=False)
-                    
-                    if not data.empty:
-                        data = clean_yahoo_data(data)
-                        if len(data) > 0:
-                            fig = create_td_sequential_chart(data, formatted_ticker)
-                            if fig is not None:
-                                st.plotly_chart(fig, use_container_width=True)
-                                
-                                # Store the chart data
-                                st.session_state.last_chart_data = data
-                                st.session_state.last_chart_fig = fig
-                except Exception as e:
-                    st.error(f"Error analyzing {ticker_input}: {str(e)}")
-    
-    # PART 2: Dashboard Controls in Sidebar and Dashboard Display
-    st.sidebar.markdown("### HK Stocks Dashboard")
-    
-    # Fetch stocks from GitHub
-    hk_stocks = get_stocks_from_github()
-    
-    if hk_stocks:
-        # Initialize dashboard on first load
-        if st.session_state.dashboard_data is None:
-            with st.spinner("Initializing dashboard data..."):
-                st.session_state.dashboard_data = update_dashboard_data(hk_stocks)
-        
-        # Refresh button for dashboard only
-        if st.sidebar.button("Refresh Dashboard"):
-            with st.spinner("Updating dashboard data..."):
-                st.session_state.dashboard_data = update_dashboard_data(hk_stocks)
-        
-        # Display dashboard
-        if st.session_state.dashboard_data:
-            st.markdown("### HK Stocks Dashboard")
+            end_date = pd.Timestamp.today()
+            start_date = end_date - pd.DateOffset(years=1)
+            data = yf.download(formatted_ticker, start=start_date, end=end_date, progress=False)
             
+            if not data.empty:
+                data = clean_yahoo_data(data)
+                if len(data) > 0:
+                    fig = create_td_sequential_chart(data, formatted_ticker)
+                    if fig is not None:
+                        st.plotly_chart(fig, use_container_width=True)
+        except Exception as e:
+            st.error(f"Error analyzing {ticker_input}: {str(e)}")
+    
+    # PART 2: Asset Dashboard
+    st.markdown(f"### {asset_type} Dashboard")
+    
+    # Fetch stocks from GitHub for selected asset type
+    assets = get_stocks_from_github(asset_type)
+    
+    if assets:
+        # Initialize dashboard on first load
+        if st.session_state.dashboard_data is None or refresh_button:
+            with st.spinner(f"{'Initializing' if st.session_state.dashboard_data is None else 'Updating'} {asset_type} data..."):
+                st.session_state.dashboard_data = update_dashboard_data(assets)
+        
+        # Display dashboard if we have data
+        if st.session_state.dashboard_data:
             # Create DataFrame
             df = pd.DataFrame(st.session_state.dashboard_data)
             
-            # Order columns
-            columns = ['Stock', 'Current Price', 'Daily Change', 
-                      'Buy Build Up', 'Buy Run Up', 'Sell Build Up', 'Sell Run Up']
-            df = df[columns]
-            
-            # Define the styling function with larger font sizes
-            def style_phases(x):
-                styles = pd.Series([''] * len(x), index=x.index)
+            if not df.empty:
+                # Convert Daily Change to numeric for sorting
+                df['Daily Change Numeric'] = df['Daily Change'].str.rstrip('%').astype(float)
+                df = df.sort_values('Daily Change Numeric', ascending=False)
+                df = df.drop('Daily Change Numeric', axis=1)
                 
-                # Style for Build Up phases (9) - increased font size
-                if x.name in ['Buy Build Up', 'Sell Build Up']:
-                    mask = x == '9'
-                    styles[mask] = 'font-weight: 900; color: #00FF00; font-size: 20px'
+                # Order columns
+                columns = ['Stock', 'Current Price', 'Daily Change', 
+                         'Buy Build Up', 'Buy Run Up', 'Sell Build Up', 'Sell Run Up']
+                df = df[columns]
                 
-                # Style for Run Up phases (13) - increased font size
-                if x.name in ['Buy Run Up', 'Sell Run Up']:
-                    mask = x == '13'
-                    styles[mask] = 'font-weight: 900; color: #FF0000; font-size: 20px'
+                # Display summary section
+                st.markdown("#### Phase Summary")
+                summary_df = create_summary_section(df)
+                st.dataframe(summary_df, use_container_width=True)
+                
+                # Add some space between summary and main table
+                st.markdown("---")
+                st.markdown("#### Stock Details")
+                
+                # Style the dataframe
+                def style_phases(x):
+                    styles = pd.Series([''] * len(x), index=x.index)
                     
-                return styles
-            
-            # Apply the styling
-            styled_df = df.style.apply(style_phases)
-            
-            # Display the dashboard with increased row height
-            st.dataframe(
-                styled_df,
-                use_container_width=True,
-                height=(len(df) + 1) * 40
-            )
-            
-            # Generate CSV for download button
-            csv_data = df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="Download Dashboard Data",
-                data=csv_data,
-                file_name="stock_phases.csv",
-                mime="text/csv",
-                key='download_button'
-            )
+                    # Style for Build Up phases (Setup)
+                    if x.name in ['Buy Build Up', 'Sell Build Up']:
+                        styles[x == '9'] = 'font-weight: 900; color: #00FF00; font-size: 20px'
+                        styles[x.astype(str).str.isdigit()] = 'color: #00FF00; font-weight: bold'
+                    
+                    # Style for Run Up phases (Countdown)
+                    if x.name in ['Buy Run Up', 'Sell Run Up']:
+                        styles[x == '13'] = 'font-weight: 900; color: #FF0000; font-size: 20px'
+                        styles[x.astype(str).str.isdigit()] = 'color: #FF0000; font-weight: bold'
+                    
+                    return styles
+                
+                # Apply styling and display without scrolling
+                styled_df = df.style.apply(style_phases)
+                
+                st.dataframe(
+                    styled_df,
+                    use_container_width=True,
+                    height=(len(df) + 1) * 40
+                )
+                
+                # Generate CSV for download button
+                csv_data = df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="Download Dashboard Data",
+                    data=csv_data,
+                    file_name=f"{asset_type.lower().replace(' ', '_')}_phases.csv",
+                    mime="text/csv",
+                    key='download_button'
+                )
+            else:
+                st.warning(f"No data available for {asset_type}. Please refresh.")
     else:
-        st.sidebar.error("Could not fetch HK stocks list from GitHub")
+        st.sidebar.error(f"Could not fetch {asset_type} list from GitHub")
 
 if __name__ == "__main__":
     main()
-if __name__ == "__main__":
-    main()
-
