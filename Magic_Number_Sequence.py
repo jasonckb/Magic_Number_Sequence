@@ -574,58 +574,7 @@ def main():
     # PART 1: Single Stock Chart Analysis
     st.markdown("### Single Stock Analysis")
     
-    # Only refresh chart if ticker changed
-    if ticker_input != st.session_state.last_ticker:
-        st.session_state.last_ticker = ticker_input
-        if ticker_input:
-            try:
-                formatted_ticker = check_ticker_format(ticker_input)
-                st.write(f"Analyzing: {formatted_ticker}")
-                
-                end_date = pd.Timestamp.today()
-                start_date = end_date - pd.DateOffset(years=1)
-                data = yf.download(formatted_ticker, start=start_date, end=end_date, progress=False)
-                
-                if not data.empty:
-                    data = clean_yahoo_data(data)
-                    if len(data) > 0:
-                        fig = create_td_sequential_chart(data, formatted_ticker)
-                        if fig is not None:
-                            st.plotly_chart(fig, use_container_width=True)
-                            
-                            # Store the chart data in session state
-                            st.session_state.last_chart_data = data
-                            st.session_state.last_chart_fig = fig
-            except Exception as e:
-                st.error(f"Error analyzing {ticker_input}: {str(e)}")
-    else:
-        # Re-display existing chart without recalculation
-        if ticker_input:
-            formatted_ticker = check_ticker_format(ticker_input)
-            st.write(f"Analyzing: {formatted_ticker}")
-            
-            # Check if we have stored chart data
-            if hasattr(st.session_state, 'last_chart_fig') and st.session_state.last_chart_fig is not None:
-                st.plotly_chart(st.session_state.last_chart_fig, use_container_width=True)
-            else:
-                # Regenerate if not stored
-                try:
-                    end_date = pd.Timestamp.today()
-                    start_date = end_date - pd.DateOffset(years=1)
-                    data = yf.download(formatted_ticker, start=start_date, end=end_date, progress=False)
-                    
-                    if not data.empty:
-                        data = clean_yahoo_data(data)
-                        if len(data) > 0:
-                            fig = create_td_sequential_chart(data, formatted_ticker)
-                            if fig is not None:
-                                st.plotly_chart(fig, use_container_width=True)
-                                
-                                # Store the chart data
-                                st.session_state.last_chart_data = data
-                                st.session_state.last_chart_fig = fig
-                except Exception as e:
-                    st.error(f"Error analyzing {ticker_input}: {str(e)}")
+    # [Previous chart code remains the same]
     
     # PART 2: Dashboard Controls in Sidebar and Dashboard Display
     st.sidebar.markdown("### HK Stocks Dashboard")
@@ -656,30 +605,28 @@ def main():
                       'Buy Build Up', 'Buy Run Up', 'Sell Build Up', 'Sell Run Up']
             df = df[columns]
             
-            # Define the styling function with larger font sizes
+            # Define the styling function
             def style_phases(x):
                 styles = pd.Series([''] * len(x), index=x.index)
                 
-                # Style for Build Up phases (9) - increased font size
                 if x.name in ['Buy Build Up', 'Sell Build Up']:
                     mask = x == '9'
-                    styles[mask] = 'font-weight: 900; color: #00FF00; font-size: 20px'
+                    styles[mask] = 'font-weight: bold; color: green; font-size: 16px'
                 
-                # Style for Run Up phases (13) - increased font size
                 if x.name in ['Buy Run Up', 'Sell Run Up']:
                     mask = x == '13'
-                    styles[mask] = 'font-weight: 900; color: #FF0000; font-size: 20px'
+                    styles[mask] = 'font-weight: bold; color: red; font-size: 16px'
                     
                 return styles
             
             # Apply the styling
             styled_df = df.style.apply(style_phases)
             
-            # Display the dashboard with increased row height
+            # Display the dashboard
             st.dataframe(
                 styled_df,
                 use_container_width=True,
-                height=(len(df) + 1) * 40
+                height=(len(df) + 1) * 35
             )
             
             # Generate CSV for download button
@@ -696,5 +643,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
