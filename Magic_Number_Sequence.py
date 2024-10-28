@@ -707,15 +707,56 @@ def main():
         st.session_state.last_ticker = None
     if 'asset_type' not in st.session_state:
         st.session_state.asset_type = "HK Stocks"
+    if 'ticker_input_box' not in st.session_state:
+        st.session_state.ticker_input_box = "AAPL"
     
     # Sidebar Configuration
     st.sidebar.title("Controls")
-    ticker_input = st.sidebar.text_input("Enter ticker", "AAPL", key="ticker_input_box")
+    
+    # Asset type selector
     asset_type = st.sidebar.selectbox(
         "Asset Dashboard Option",
         ["HK Stocks", "US Stocks", "World Index"],
         key="asset_type_selector"
     )
+    
+    # Get stock list for the selected asset type
+    assets = get_stocks_from_github(asset_type)
+    
+    # Function to update ticker input
+    def set_ticker(symbol):
+        st.session_state.ticker_input_box = symbol
+    
+    # Create three columns in the sidebar for the symbols
+    if assets:
+        st.sidebar.markdown("### Portfolio Symbols")
+        cols = st.sidebar.columns(3)
+        
+        # Calculate number of rows needed
+        num_symbols = len(assets)
+        num_rows = (num_symbols + 2) // 3  # Round up division
+        
+        # Create buttons in a grid layout
+        for row in range(num_rows):
+            for col in range(3):
+                idx = row * 3 + col
+                if idx < num_symbols:
+                    symbol = assets[idx]
+                    # Use row and column index for unique key
+                    if cols[col].button(
+                        symbol,
+                        key=f"btn_r{row}_c{col}",
+                        on_click=set_ticker,
+                        args=(symbol,)
+                    ):
+                        pass
+    
+    # Ticker input (after symbol buttons so it can be updated by them)
+    ticker_input = st.sidebar.text_input(
+        "Enter ticker",
+        key="ticker_input_box"
+    )
+    
     refresh_button = st.sidebar.button("Refresh Dashboard", key="refresh_button")
     
     # Reset dashboard data if asset type changes
@@ -725,6 +766,7 @@ def main():
     
     # PART 1: Single Stock Chart Analysis
     st.markdown("### Single Stock Analysis")
+    
     if ticker_input:
         try:
             formatted_ticker = check_ticker_format(ticker_input)
@@ -745,9 +787,6 @@ def main():
     
     # PART 2: Asset Dashboard
     st.markdown(f"### {asset_type} Dashboard")
-    
-    # Fetch stocks from GitHub for selected asset type
-    assets = get_stocks_from_github(asset_type)
     
     if assets:
         # Initialize dashboard on first load
@@ -796,9 +835,8 @@ def main():
                     
                     return styles
                 
-                # Apply styling and display without scrolling
+                # Apply styling and display
                 styled_df = df.style.apply(style_phases)
-                
                 st.dataframe(
                     styled_df,
                     use_container_width=True,
@@ -817,7 +855,8 @@ def main():
             else:
                 st.warning(f"No data available for {asset_type}. Please refresh.")
     else:
-        st.sidebar.error(f"Could not fetch {asset_type} list from GitHub")
+        st.error(f"Could not fetch {asset_type} list from GitHub")
 
 if __name__ == "__main__":
     main()
+
