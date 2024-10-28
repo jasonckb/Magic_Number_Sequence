@@ -672,42 +672,43 @@ def main():
     # PART 2: Dashboard Controls in Sidebar
     st.sidebar.markdown("### HK Stocks Dashboard")
     
-    # Fetch stocks from GitHub
+    # Fetch stocks from GitHub and refresh button
     hk_stocks = get_stocks_from_github()
     
-    if hk_stocks:
-        st.sidebar.write("Loaded stocks:", ", ".join(hk_stocks))
-        if st.sidebar.button("Refresh Dashboard"):
-            with st.spinner("Updating dashboard data..."):
-                dashboard_data = update_dashboard_data(hk_stocks)
+    if hk_stocks and st.sidebar.button("Refresh Dashboard"):
+        with st.spinner("Updating dashboard data..."):
+            dashboard_data = update_dashboard_data(hk_stocks)
+            
+            if dashboard_data:
+                # Display dashboard in main area below the chart
+                st.markdown("### HK Stocks Dashboard")
                 
-                if dashboard_data:
-                    # Display dashboard in main area below the chart
-                    st.markdown("### HK Stocks Dashboard")
-                    
-                    # Create DataFrame
-                    df = pd.DataFrame(dashboard_data)
-                    
-                    # Style the dataframe
-                    def highlight_phases(val):
-                        if isinstance(val, str) and val.isdigit():
-                            return 'background-color: #90EE90' if int(val) > 0 else ''
-                        return ''
-                    
-                    # Apply styling
-                    styled_df = df.style.apply(lambda x: [highlight_phases(v) for v in x])
-                    
-                    # Display the dashboard
-                    st.dataframe(styled_df, use_container_width=True)
-                    
-                    # Option to download as CSV
-                    st.download_button(
-                        label="Download Dashboard Data",
-                        data=csv,
-                        file_name="stock_phases.csv",
-                        mime="text/csv"
-                    )
-    else:
+                # Create DataFrame
+                df = pd.DataFrame(dashboard_data)
+                
+                # Style the dataframe
+                def highlight_phases(val):
+                    if isinstance(val, str) and val.isdigit():
+                        return 'background-color: #90EE90' if int(val) > 0 else ''
+                    return ''
+                
+                # Apply styling and display without scrolling
+                styled_df = df.style.apply(lambda x: [highlight_phases(v) for v in x])
+                st.dataframe(
+                    styled_df,
+                    use_container_width=True,
+                    height=(len(df) + 1) * 35  # Adjust height based on number of rows
+                )
+                
+                # Generate CSV for download button
+                csv_data = df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="Download Dashboard Data",
+                    data=csv_data,
+                    file_name="stock_phases.csv",
+                    mime="text/csv"
+                )
+    elif not hk_stocks:
         st.sidebar.error("Could not fetch HK stocks list from GitHub")
 
 if __name__ == "__main__":
