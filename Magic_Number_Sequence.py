@@ -6,6 +6,10 @@ import numpy as np
 import requests
 from datetime import datetime, timedelta
 
+# Page Configuration
+st.set_page_config(layout="wide", page_title="Magic Number Sequence")
+st.title("Magic Number Sequence by Jason Chan")
+
 
 def get_stocks_from_github(asset_type):
     """Get stock list for the specified asset type"""
