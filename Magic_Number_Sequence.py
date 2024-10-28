@@ -1,8 +1,7 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
-import plotly.graph_objs as go
-import numpy as np
+import requests
 from datetime import datetime, timedelta
 
 # Page Configuration
@@ -11,6 +10,80 @@ st.title("Magic Number Sequence by Jason Chan")
 
 # Sidebar input
 ticker_input = st.sidebar.text_input("Enter ticker", "AAPL")
+
+def get_stocks_from_github():
+    """Fetch stock list from GitHub"""
+    try:
+        github_url = "https://raw.githubusercontent.com/jasonckb/Magic_Number_Sequence/main/HK%20Stocks.txt"
+        response = requests.get(github_url)
+        response.raise_for_status()
+        stocks = [line.strip() for line in response.text.splitlines() if line.strip()]
+        return stocks
+    except Exception as e:
+        st.error(f"Error fetching stocks from GitHub: {str(e)}")
+        return []
+
+def get_current_phase(df):
+    """Get the current phase numbers for a stock"""
+    buy_setup, sell_setup, buy_countdown, sell_countdown, _, _, _, _, _ = calculate_td_sequential(df)
+    
+    # Get the last non-zero values
+    current_phases = {
+        'Buy Build Up': '-',
+        'Sell Build Up': '-',
+        'Buy Run Up': '-',
+        'Sell Run Up': '-'
+    }
+    
+    # Get the most recent non-zero values for each phase
+    if len(buy_setup) > 0:
+        last_buy_setup = next((str(int(x)) for x in reversed(buy_setup) if x > 0), '-')
+        current_phases['Buy Build Up'] = last_buy_setup
+        
+    if len(sell_setup) > 0:
+        last_sell_setup = next((str(int(x)) for x in reversed(sell_setup) if x > 0), '-')
+        current_phases['Sell Build Up'] = last_sell_setup
+        
+    if len(buy_countdown) > 0:
+        last_buy_countdown = next((str(int(x)) for x in reversed(buy_countdown) if x > 0), '-')
+        current_phases['Buy Run Up'] = last_buy_countdown
+        
+    if len(sell_countdown) > 0:
+        last_sell_countdown = next((str(int(x)) for x in reversed(sell_countdown) if x > 0), '-')
+        current_phases['Sell Run Up'] = last_sell_countdown
+    
+    return current_phases
+
+def update_dashboard_data(stock_list):
+    """Update data for all stocks in the dashboard"""
+    dashboard_data = []
+    
+    for ticker in stock_list:
+        formatted_ticker = check_ticker_format(ticker)
+        try:
+            end_date = pd.Timestamp.today()
+            start_date = end_date - pd.DateOffset(days=30)
+            data = yf.download(formatted_ticker, start=start_date, end=end_date, progress=False)
+            
+            if not data.empty:
+                data = clean_yahoo_data(data)
+                if len(data) > 0:
+                    current_price = f"{data['Close'][-1]:.2f}"
+                    daily_change = f"{((data['Close'][-1] / data['Close'][-2] - 1) * 100):.2f}%"
+                    
+                    phases = get_current_phase(data)
+                    
+                    dashboard_data.append({
+                        'Stock': ticker,
+                        'Current Price': current_price,
+                        'Daily Change': daily_change,
+                        **phases
+                    })
+                    
+        except Exception as e:
+            st.error(f"Error processing {ticker}: {str(e)}")
+    
+    return dashboard_data
 
 def check_ticker_format(ticker):
     if ticker.isdigit():
@@ -574,41 +647,73 @@ def create_td_sequential_chart(df, ticker):
     return fig
 
 def main():
-    try:
-        # Get formatted ticker
-        formatted_ticker = check_ticker_format(ticker_input)
-        st.write("Formatted Ticker: ", formatted_ticker)
+    st.set_page_config(layout="wide")
+    st.title("Magic Number Sequence Analysis")
+    
+    # Create two columns for layout
+    left_col, right_col = st.columns([1, 3])
+    
+    # PART 1: Single Stock Chart Analysis (Left Column)
+    with left_col:
+        st.markdown("### Single Stock Analysis")
+        ticker_input = st.text_input("Enter ticker symbol", "AAPL")
         
-        # Download data
-        end_date = pd.Timestamp.today()
-        start_date = end_date - pd.DateOffset(years=1)
-        
-        st.write("Downloading data...")
-        data = yf.download(formatted_ticker, start=start_date, end=end_date, progress=False)
-        
-        if not data.empty:
-            # Clean and verify data
-            data = clean_yahoo_data(data)
-            
-            if len(data) > 0:
-                st.success("Data processed successfully!")
+        if ticker_input:
+            try:
+                formatted_ticker = check_ticker_format(ticker_input)
+                st.write(f"Analyzing: {formatted_ticker}")
                 
-                # Create and display chart
-                st.write("Creating chart...")
-                fig = create_td_sequential_chart(data, formatted_ticker)
-                if fig is not None:
-                    st.plotly_chart(fig, use_container_width=True)
+                end_date = pd.Timestamp.today()
+                start_date = end_date - pd.DateOffset(years=1)
+                data = yf.download(formatted_ticker, start=start_date, end=end_date, progress=False)
+                
+                if not data.empty:
+                    data = clean_yahoo_data(data)
+                    if len(data) > 0:
+                        fig = create_td_sequential_chart(data, formatted_ticker)
+                        if fig is not None:
+                            st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.error(f"Error analyzing {ticker_input}: {str(e)}")
+    
+    # PART 2: Dashboard of HK Stocks (Right Column)
+    with right_col:
+        st.markdown("### HK Stocks Dashboard")
+        
+        # Fetch stocks from GitHub
+        hk_stocks = get_stocks_from_github()
+        
+        if hk_stocks:
+            if st.button("Refresh Dashboard"):
+                with st.spinner("Updating dashboard data..."):
+                    dashboard_data = update_dashboard_data(hk_stocks)
                     
-                # Display recent data
-                with st.expander("View Recent Data"):
-                    st.dataframe(data.tail())
-            else:
-                st.error("No valid data after cleaning")
+                    if dashboard_data:
+                        # Create DataFrame
+                        df = pd.DataFrame(dashboard_data)
+                        
+                        # Style the dataframe
+                        def highlight_phases(val):
+                            if isinstance(val, str) and val.isdigit():
+                                return 'background-color: #90EE90' if int(val) > 0 else ''
+                            return ''
+                        
+                        # Apply styling
+                        styled_df = df.style.apply(lambda x: [highlight_phases(v) for v in x])
+                        
+                        # Display the dashboard
+                        st.dataframe(styled_df, use_container_width=True)
+                        
+                        # Option to download as CSV
+                        csv = df.to_csv(index=False)
+                        st.download_button(
+                            label="Download Dashboard Data",
+                            data=csv,
+                            file_name="stock_phases.csv",
+                            mime="text/csv"
+                        )
         else:
-            st.error(f"No data available for {formatted_ticker}")
-            
-    except Exception as e:
-        st.error(f"Error occurred: {str(e)}")
+            st.error("Could not fetch HK stocks list from GitHub")
 
 if __name__ == "__main__":
     main()
