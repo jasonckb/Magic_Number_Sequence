@@ -649,8 +649,7 @@ def create_td_sequential_chart(df, ticker):
     return fig
 
 def main():
-    st.set_page_config(layout="wide")
-    st.title("Magic Number Sequence Analysis")
+    # Remove the st.set_page_config from here
     
     # Create two columns for layout
     left_col, right_col = st.columns([1, 3])
@@ -658,8 +657,6 @@ def main():
     # PART 1: Single Stock Chart Analysis (Left Column)
     with left_col:
         st.markdown("### Single Stock Analysis")
-        ticker_input = st.text_input("Enter ticker symbol", "AAPL")
-        
         if ticker_input:
             try:
                 formatted_ticker = check_ticker_format(ticker_input)
