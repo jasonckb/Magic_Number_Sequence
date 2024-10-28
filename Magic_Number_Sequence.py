@@ -656,28 +656,30 @@ def main():
                       'Buy Build Up', 'Buy Run Up', 'Sell Build Up', 'Sell Run Up']
             df = df[columns]
             
-            # Define the styling function
+            # Define the styling function with larger font sizes
             def style_phases(x):
                 styles = pd.Series([''] * len(x), index=x.index)
                 
+                # Style for Build Up phases (9) - increased font size
                 if x.name in ['Buy Build Up', 'Sell Build Up']:
                     mask = x == '9'
-                    styles[mask] = 'font-weight: bold; color: green; font-size: 16px'
+                    styles[mask] = 'font-weight: 900; color: #00FF00; font-size: 20px'
                 
+                # Style for Run Up phases (13) - increased font size
                 if x.name in ['Buy Run Up', 'Sell Run Up']:
                     mask = x == '13'
-                    styles[mask] = 'font-weight: bold; color: red; font-size: 16px'
+                    styles[mask] = 'font-weight: 900; color: #FF0000; font-size: 20px'
                     
                 return styles
             
             # Apply the styling
             styled_df = df.style.apply(style_phases)
             
-            # Display the dashboard
+            # Display the dashboard with increased row height
             st.dataframe(
                 styled_df,
                 use_container_width=True,
-                height=(len(df) + 1) * 35
+                height=(len(df) + 1) * 40
             )
             
             # Generate CSV for download button
