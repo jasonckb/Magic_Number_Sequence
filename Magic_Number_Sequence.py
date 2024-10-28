@@ -696,18 +696,37 @@ def main():
             # Create DataFrame
             df = pd.DataFrame(st.session_state.dashboard_data)
             
+            # Order columns (optional, but makes the display more organized)
+            columns = ['Stock', 'Current Price', 'Daily Change', 
+                      'Buy Build Up', 'Buy Run Up', 'Sell Build Up', 'Sell Run Up']
+            df = df[columns]
+            
             # Style the dataframe
-            def highlight_phases(val):
+            def style_phases(val, column):
                 if isinstance(val, str) and val.isdigit():
-                    return 'background-color: #90EE90' if int(val) > 0 else ''
+                    num_val = int(val)
+                    
+                    # Style for Build Up phases (9)
+                    if num_val == 9 and ('Build Up' in column):
+                        return 'font-weight: bold; color: green; font-size: 16px'
+                    
+                    # Style for Run Up phases (13)
+                    if num_val == 13 and ('Run Up' in column):
+                        return 'font-weight: bold; color: red; font-size: 16px'
+                        
                 return ''
             
-            # Apply styling and display without scrolling
-            styled_df = df.style.apply(lambda x: [highlight_phases(v) for v in x])
+            # Apply styling with proper column handling
+            styled_df = df.style.apply(lambda df: pd.DataFrame(
+                [[style_phases(val, col) for val in df[col]] for col in df.columns], 
+                index=df.columns
+            ).T)
+            
+            # Display the dashboard - adjust height based on number of rows
             st.dataframe(
                 styled_df,
                 use_container_width=True,
-                height=(len(df) + 1) * 35
+                height=(len(df) + 1) * 35  # Adjust row height if needed
             )
             
             # Generate CSV for download button
@@ -716,7 +735,8 @@ def main():
                 label="Download Dashboard Data",
                 data=csv_data,
                 file_name="stock_phases.csv",
-                mime="text/csv"
+                mime="text/csv",
+                key='download_button'  # Add unique key to avoid conflicts
             )
     else:
         st.sidebar.error("Could not fetch HK stocks list from GitHub")
