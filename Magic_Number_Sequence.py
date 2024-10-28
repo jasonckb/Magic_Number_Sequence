@@ -624,66 +624,101 @@ def update_dashboard_data(stock_list):
     return dashboard_data
 
 def main():
+    # Initialize session state if not exists
+    if 'dashboard_data' not in st.session_state:
+        st.session_state.dashboard_data = None
+    if 'last_ticker' not in st.session_state:
+        st.session_state.last_ticker = None
+    
     # PART 1: Single Stock Chart Analysis
     st.markdown("### Single Stock Analysis")
-    if ticker_input:
-        try:
+    
+    # Only refresh chart if ticker changed
+    if ticker_input != st.session_state.last_ticker:
+        st.session_state.last_ticker = ticker_input
+        if ticker_input:
+            try:
+                formatted_ticker = check_ticker_format(ticker_input)
+                st.write(f"Analyzing: {formatted_ticker}")
+                
+                end_date = pd.Timestamp.today()
+                start_date = end_date - pd.DateOffset(years=1)
+                data = yf.download(formatted_ticker, start=start_date, end=end_date, progress=False)
+                
+                if not data.empty:
+                    data = clean_yahoo_data(data)
+                    if len(data) > 0:
+                        fig = create_td_sequential_chart(data, formatted_ticker)
+                        if fig is not None:
+                            st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.error(f"Error analyzing {ticker_input}: {str(e)}")
+    else:
+        # Re-display existing chart without recalculation
+        if ticker_input:
             formatted_ticker = check_ticker_format(ticker_input)
             st.write(f"Analyzing: {formatted_ticker}")
-            
-            end_date = pd.Timestamp.today()
-            start_date = end_date - pd.DateOffset(years=1)
-            data = yf.download(formatted_ticker, start=start_date, end=end_date, progress=False)
-            
-            if not data.empty:
-                data = clean_yahoo_data(data)
-                if len(data) > 0:
-                    fig = create_td_sequential_chart(data, formatted_ticker)
-                    if fig is not None:
-                        st.plotly_chart(fig, use_container_width=True)
-        except Exception as e:
-            st.error(f"Error analyzing {ticker_input}: {str(e)}")
+            try:
+                end_date = pd.Timestamp.today()
+                start_date = end_date - pd.DateOffset(years=1)
+                data = yf.download(formatted_ticker, start=start_date, end=end_date, progress=False)
+                
+                if not data.empty:
+                    data = clean_yahoo_data(data)
+                    if len(data) > 0:
+                        fig = create_td_sequential_chart(data, formatted_ticker)
+                        if fig is not None:
+                            st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.error(f"Error analyzing {ticker_input}: {str(e)}")
     
-    # PART 2: Dashboard Controls in Sidebar
+    # PART 2: Dashboard Controls in Sidebar and Dashboard Display
     st.sidebar.markdown("### HK Stocks Dashboard")
     
-    # Fetch stocks from GitHub and refresh button
+    # Fetch stocks from GitHub
     hk_stocks = get_stocks_from_github()
     
-    if hk_stocks and st.sidebar.button("Refresh Dashboard"):
-        with st.spinner("Updating dashboard data..."):
-            dashboard_data = update_dashboard_data(hk_stocks)
+    if hk_stocks:
+        # Initialize dashboard on first load
+        if st.session_state.dashboard_data is None:
+            with st.spinner("Initializing dashboard data..."):
+                st.session_state.dashboard_data = update_dashboard_data(hk_stocks)
+        
+        # Refresh button for dashboard only
+        if st.sidebar.button("Refresh Dashboard"):
+            with st.spinner("Updating dashboard data..."):
+                st.session_state.dashboard_data = update_dashboard_data(hk_stocks)
+        
+        # Display dashboard
+        if st.session_state.dashboard_data:
+            st.markdown("### HK Stocks Dashboard")
             
-            if dashboard_data:
-                # Display dashboard in main area below the chart
-                st.markdown("### HK Stocks Dashboard")
-                
-                # Create DataFrame
-                df = pd.DataFrame(dashboard_data)
-                
-                # Style the dataframe
-                def highlight_phases(val):
-                    if isinstance(val, str) and val.isdigit():
-                        return 'background-color: #90EE90' if int(val) > 0 else ''
-                    return ''
-                
-                # Apply styling and display without scrolling
-                styled_df = df.style.apply(lambda x: [highlight_phases(v) for v in x])
-                st.dataframe(
-                    styled_df,
-                    use_container_width=True,
-                    height=(len(df) + 1) * 35
-                )
-                
-                # Generate CSV for download button
-                csv_data = df.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="Download Dashboard Data",
-                    data=csv_data,
-                    file_name="stock_phases.csv",
-                    mime="text/csv"
-                )
-    elif not hk_stocks:
+            # Create DataFrame
+            df = pd.DataFrame(st.session_state.dashboard_data)
+            
+            # Style the dataframe
+            def highlight_phases(val):
+                if isinstance(val, str) and val.isdigit():
+                    return 'background-color: #90EE90' if int(val) > 0 else ''
+                return ''
+            
+            # Apply styling and display without scrolling
+            styled_df = df.style.apply(lambda x: [highlight_phases(v) for v in x])
+            st.dataframe(
+                styled_df,
+                use_container_width=True,
+                height=(len(df) + 1) * 35
+            )
+            
+            # Generate CSV for download button
+            csv_data = df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="Download Dashboard Data",
+                data=csv_data,
+                file_name="stock_phases.csv",
+                mime="text/csv"
+            )
+    else:
         st.sidebar.error("Could not fetch HK stocks list from GitHub")
 
 if __name__ == "__main__":
