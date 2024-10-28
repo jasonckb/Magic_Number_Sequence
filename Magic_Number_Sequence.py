@@ -10,9 +10,9 @@ from datetime import datetime, timedelta
 def get_stocks_from_github(asset_type):
     """Fetch stock list from GitHub based on asset type"""
     urls = {
-        "HK Stocks": "https://raw.githubusercontent.com/jasonckb/Magic_Sequence/main/HK%20Stocks.txt",
-        "US Stocks": "https://raw.githubusercontent.com/jasonckb/Magic_Sequence/main/US%20Stocks.txt",
-        "World Index": "https://raw.githubusercontent.com/jasonckb/Magic_Sequence/main/World%20Index.txt"
+        "HK Stocks": "https://raw.githubusercontent.com/jasonckb/Magic_Sequence/blob/main/HK%20Stocks.txt",
+        "US Stocks": "https://raw.githubusercontent.com/jasonckb/Magic_Sequence/blob/main/US%20Stocks.txt",
+        "World Index": "https://raw.githubusercontent.com/jasonckb/Magic_Sequence/blob/main/World%20Index.txt"
     }
     
     try:
@@ -21,17 +21,6 @@ def get_stocks_from_github(asset_type):
         response.raise_for_status()
         stocks = [line.strip() for line in response.text.splitlines() if line.strip()]
         return stocks
-    except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 404:
-            st.error(f"""
-                Could not fetch {asset_type} list from GitHub. 
-                This might be because the repository is private. 
-                Please ensure the repository is public or provide an alternative data source.
-                Error: {str(e)}
-            """)
-        else:
-            st.error(f"Error fetching {asset_type} from GitHub: {str(e)}")
-        return []
     except Exception as e:
         st.error(f"Error fetching {asset_type} from GitHub: {str(e)}")
         return []
