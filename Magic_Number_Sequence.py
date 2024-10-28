@@ -6,10 +6,6 @@ import numpy as np
 import requests
 from datetime import datetime, timedelta
 
-# Page Configuration
-st.set_page_config(layout="wide", page_title="Magic Number Sequence")
-st.title("Magic Number Sequence by Jason Chan")
-
 
 def get_stocks_from_github(asset_type):
     """Get stock list for the specified asset type"""
@@ -31,7 +27,7 @@ def get_stocks_from_github(asset_type):
             "0914.HK", "0916.HK", "6078.HK", "2333.HK", "3888.HK"
         ],
         "US Stocks": [
-            "^NDX", "^GSPC", "AAPL", "MSFT", "AMZN", "NVDA", "GOOG", "META", "TSLA", "JPM", 
+            "^NDX", "^SPX", "AAPL", "MSFT", "AMZN", "NVDA", "GOOG", "META", "TSLA", "JPM", 
             "V", "UNH", "LLY", "JNJ", "XOM", "WMT", "MA", "PG", "KO", "HD", "AVGO", "CVX", 
             "MRK", "GS", "ABBV", "COST", "TSM", "VZ", "PFE", "NFLX", "ADBE", "ASML", "CRM", 
             "ACN", "TRV", "BA", "TXN", "IBM", "DIS", "UPS", "SPGI", "INTC", "AMD", "QCOM", 
@@ -42,7 +38,7 @@ def get_stocks_from_github(asset_type):
             "XLY", "XLI", "XLB", "XLRE", "XLF", "XLV", "OXY", "NVO", "CCL", "LEN"
         ],
         "World Index": [
-            "^GSPC", "^NDX", "^RUT", "^SOX", "^TNX", "^DJI", "^HSI", "3032.HK", "XIN9.FGI", 
+            "^SPX", "^NDX", "^RUT", "^SOX", "^TNX", "^DJI", "^HSI", "3032.HK", "XIN9.FGI", 
             "^N225", "^BSESN", "^KS11", "^TWII", "^GDAXI", "^FTSE", "^FCHI", "^BVSP", "EEMA", 
             "EEM", "^HUI", "CL=F", "GC=F", "HG=F", "SI=F", "DX-Y.NYB", "EURUSD=X", "GBPUSD=X", 
             "AUDUSD=X", "NZDUSD=X", "CADUSD=X", "CHF=X", "JPY=X", "CNY=X", "EURJPY=X", "GBPJPY=X", 
@@ -604,22 +600,47 @@ def get_current_phase(df):
     }
     
     if len(buy_setup) > 0:
-        last_buy_setup = next((str(int(x)) for x in reversed(buy_setup) if x > 0), '-')
-        current_phases['Buy Build Up'] = last_buy_setup
-        
+        # Check if the current buy setup is still active
+        last_idx = len(buy_setup) - 1
+        if buy_setup[last_idx] > 0:
+            # Verify it's an active setup by checking if previous bars form a sequence
+            is_active = True
+            count = int(buy_setup[last_idx])
+            for i in range(count - 1):
+                if last_idx - i - 1 < 0 or buy_setup[last_idx - i - 1] != count - i - 1:
+                    is_active = False
+                    break
+            if is_active:
+                current_phases['Buy Build Up'] = str(count)
+    
     if len(sell_setup) > 0:
-        last_sell_setup = next((str(int(x)) for x in reversed(sell_setup) if x > 0), '-')
-        current_phases['Sell Build Up'] = last_sell_setup
-        
+        # Check if the current sell setup is still active
+        last_idx = len(sell_setup) - 1
+        if sell_setup[last_idx] > 0:
+            # Verify it's an active setup by checking if previous bars form a sequence
+            is_active = True
+            count = int(sell_setup[last_idx])
+            for i in range(count - 1):
+                if last_idx - i - 1 < 0 or sell_setup[last_idx - i - 1] != count - i - 1:
+                    is_active = False
+                    break
+            if is_active:
+                current_phases['Sell Build Up'] = str(count)
+    
     if len(buy_countdown) > 0:
-        last_buy_countdown = next((str(int(x)) for x in reversed(buy_countdown) if x > 0), '-')
-        current_phases['Buy Run Up'] = last_buy_countdown
-        
+        # For countdown, we only show the current bar's count if it's part of an active sequence
+        last_idx = len(buy_countdown) - 1
+        if buy_countdown[last_idx] > 0:
+            current_phases['Buy Run Up'] = str(int(buy_countdown[last_idx]))
+    
     if len(sell_countdown) > 0:
-        last_sell_countdown = next((str(int(x)) for x in reversed(sell_countdown) if x > 0), '-')
-        current_phases['Sell Run Up'] = last_sell_countdown
+        # For countdown, we only show the current bar's count if it's part of an active sequence
+        last_idx = len(sell_countdown) - 1
+        if sell_countdown[last_idx] > 0:
+            current_phases['Sell Run Up'] = str(int(sell_countdown[last_idx]))
     
     return current_phases
+
 
 def update_dashboard_data(stock_list):
     """Update data for all stocks in the dashboard"""
@@ -675,7 +696,6 @@ def create_summary_section(df):
     return summary_df
 
 def main():
-    
     # Initialize session state if not exists
     if 'dashboard_data' not in st.session_state:
         st.session_state.dashboard_data = None
