@@ -8,21 +8,49 @@ from datetime import datetime, timedelta
 
 
 def get_stocks_from_github(asset_type):
-    """Fetch stock list from GitHub based on asset type"""
-    urls = {
-        "HK Stocks": "https://raw.githubusercontent.com/jasonckb/Magic_Sequence/blob/main/HK%20Stocks.txt",
-        "US Stocks": "https://raw.githubusercontent.com/jasonckb/Magic_Sequence/blob/main/US%20Stocks.txt",
-        "World Index": "https://raw.githubusercontent.com/jasonckb/Magic_Sequence/blob/main/World%20Index.txt"
+    """Get stock list for the specified asset type"""
+    # Default stock lists
+    default_stocks = {
+        "HK Stocks": [
+            "^HSI", "0020.HK", "0017.HK", "0241.HK", "0066.HK", "1038.HK", "0006.HK", "0011.HK", 
+            "0012.HK", "0857.HK", "3988.HK", "1044.HK", "0386.HK", "2388.HK", "1113.HK", "0941.HK", 
+            "1997.HK", "0001.HK", "1093.HK", "1109.HK", "1177.HK", "1211.HK", "1299.HK", "1398.HK", 
+            "0016.HK", "0175.HK", "1810.HK", "1876.HK", "1928.HK", "2007.HK", "2018.HK", "2269.HK", 
+            "2313.HK", "2318.HK", "2319.HK", "2331.HK", "2382.HK", "2628.HK", "0267.HK", "0027.HK", 
+            "0288.HK", "0003.HK", "3690.HK", "0388.HK", "3968.HK", "0005.HK", "6098.HK", "0669.HK", 
+            "6862.HK", "0688.HK", "0700.HK", "0762.HK", "0823.HK", "0868.HK", "0883.HK", "0939.HK", 
+            "0960.HK", "0968.HK", "9988.HK", "1024.HK", "1347.HK", "1833.HK", "2013.HK", "2518.HK", 
+            "0268.HK", "0285.HK", "3888.HK", "0522.HK", "6060.HK", "6618.HK", "6690.HK", "0772.HK", 
+            "0909.HK", "9618.HK", "9626.HK", "9698.HK", "0981.HK", "9888.HK", "0992.HK", "9961.HK", 
+            "9999.HK", "2015.HK", "0291.HK", "0293.HK", "0358.HK", "1772.HK", "1776.HK", "1787.HK", 
+            "1801.HK", "1818.HK", "1898.HK", "0019.HK", "1929.HK", "0799.HK", "0836.HK", "0853.HK", 
+            "0914.HK", "0916.HK", "6078.HK", "2333.HK", "3888.HK"
+        ],
+        "US Stocks": [
+            "^NDX", "^GSPC", "AAPL", "MSFT", "AMZN", "NVDA", "GOOG", "META", "TSLA", "JPM", 
+            "V", "UNH", "LLY", "JNJ", "XOM", "WMT", "MA", "PG", "KO", "HD", "AVGO", "CVX", 
+            "MRK", "GS", "ABBV", "COST", "TSM", "VZ", "PFE", "NFLX", "ADBE", "ASML", "CRM", 
+            "ACN", "TRV", "BA", "TXN", "IBM", "DIS", "UPS", "SPGI", "INTC", "AMD", "QCOM", 
+            "AMT", "CHTR", "SBUX", "MS", "BLK", "GE", "MMM", "GILD", "CAT", "INTU", "ISRG", 
+            "AMGN", "CVS", "DE", "EQIX", "TJX", "PGR", "BKNG", "MU", "LRCX", "REGN", "PLTR", 
+            "SNOW", "PANW", "CRWD", "ZS", "ABNB", "CDNS", "DDOG", "ICE", "TTD", "TEAM", "CEG", 
+            "VST", "NRG", "NEE", "PYPL", "FTNT", "IDXX", "SMH", "XLU", "XLP", "XLE", "XLK", 
+            "XLY", "XLI", "XLB", "XLRE", "XLF", "XLV", "OXY", "NVO", "CCL", "LEN"
+        ],
+        "World Index": [
+            "^GSPC", "^NDX", "^RUT", "^SOX", "^TNX", "^DJI", "^HSI", "3032.HK", "XIN9.FGI", 
+            "^N225", "^BSESN", "^KS11", "^TWII", "^GDAXI", "^FTSE", "^FCHI", "^BVSP", "EEMA", 
+            "EEM", "^HUI", "CL=F", "GC=F", "HG=F", "SI=F", "DX-Y.NYB", "EURUSD=X", "GBPUSD=X", 
+            "AUDUSD=X", "NZDUSD=X", "CADUSD=X", "CHF=X", "JPY=X", "CNY=X", "EURJPY=X", "GBPJPY=X", 
+            "AUDJPY=X", "NZDJPY=X", "CADJPY=X", "CHFJPY=X", "EURAUD=X", "EURNZD=X", "EURGBP=X", 
+            "EURCAD=X", "GBPAUD=X", "GBPNZD=X", "GBPCAD=X", "AUDNZD=X", "AUDCAD=X", "BTC=F", "ETH=F"
+        ]
     }
     
     try:
-        github_url = urls[asset_type]
-        response = requests.get(github_url)
-        response.raise_for_status()
-        stocks = [line.strip() for line in response.text.splitlines() if line.strip()]
-        return stocks
-    except Exception as e:
-        st.error(f"Error fetching {asset_type} from GitHub: {str(e)}")
+        return default_stocks[asset_type]
+    except KeyError:
+        st.error(f"Unknown asset type: {asset_type}")
         return []
 
 
