@@ -799,7 +799,7 @@ def main():
                 st.markdown("---")
                 st.markdown("#### Stock Details")
                 
-                 Style the dataframe
+                #Style the dataframe
                 def style_phases(x):
                     styles = pd.Series([''] * len(x), index=x.index)
                     
