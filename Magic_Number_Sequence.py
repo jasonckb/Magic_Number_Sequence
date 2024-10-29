@@ -799,19 +799,23 @@ def main():
                 st.markdown("---")
                 st.markdown("#### Stock Details")
                 
-                # Style the dataframe
+                 Style the dataframe
                 def style_phases(x):
                     styles = pd.Series([''] * len(x), index=x.index)
                     
                     # Style for Build Up phases (Setup)
                     if x.name in ['Buy Build Up', 'Sell Build Up']:
-                        styles[x == '9'] = 'font-weight: 900; color: green; font-size: 20px'
-                        styles[x.astype(str).str.isdigit()] = 'color: black; font-weight: bold'
+                        # Add background color for 9s
+                        styles[x == '9'] = 'font-weight: 900; color: dark Green; font-size: 20px; background-color: #90EE90'  # Light green
+                        # Normal styling for other digits
+                        styles[x.astype(str).str.isdigit() & (x != '9')] = 'color: black; font-weight: bold'
                     
                     # Style for Run Up phases (Countdown)
                     if x.name in ['Buy Run Up', 'Sell Run Up']:
-                        styles[x == '13'] = 'font-weight: 900; color: red; font-size: 20px'
-                        styles[x.astype(str).str.isdigit()] = 'color: black; font-weight: bold'
+                        # Add background color for 13s
+                        styles[x == '13'] = 'font-weight: 900; color: red; font-size: 20px; background-color: #FFB6C1'  # Light pink
+                        # Normal styling for other digits
+                        styles[x.astype(str).str.isdigit() & (x != '13')] = 'color: black; font-weight: bold'
                     
                     return styles
                 
