@@ -590,38 +590,38 @@ def create_td_sequential_chart(data, formatted_ticker):
     return fig
 
 def get_current_phase(df):
-+    """Get the current phase numbers for a stock"""
-+    buy_setup, sell_setup, buy_countdown, sell_countdown, _, _, _, _, _ = calculate_td_sequential(df)
-+    
-+    current_phases = {
-+        'Buy Build Up': '-',
-+        'Sell Build Up': '-',
-+        'Buy Run Up': '-',
-+        'Sell Run Up': '-'
-+    }
-+    
-+    # Only look at the last bar
-+    if len(buy_setup) > 0:
-+        last_value = buy_setup[-1]
-+        if last_value > 0:
-+            current_phases['Buy Build Up'] = str(int(last_value))
-+    
-+    if len(sell_setup) > 0:
-+        last_value = sell_setup[-1]
-+        if last_value > 0:
-+            current_phases['Sell Build Up'] = str(int(last_value))
-+    
-+    if len(buy_countdown) > 0:
-+        last_value = buy_countdown[-1]
-+        if last_value > 0 and last_value < 14:  # Exclude reset value 14
-+            current_phases['Buy Run Up'] = str(int(last_value))
-+    
-+    if len(sell_countdown) > 0:
-+        last_value = sell_countdown[-1]
-+        if last_value > 0 and last_value < 14:  # Exclude reset value 14
-+            current_phases['Sell Run Up'] = str(int(last_value))
-+    
-+    return current_phases
+    """Get the current phase numbers for a stock"""
+    buy_setup, sell_setup, buy_countdown, sell_countdown, _, _, _, _, _ = calculate_td_sequential(df)
+    
+    current_phases = {
+        'Buy Build Up': '-',
+        'Sell Build Up': '-',
+        'Buy Run Up': '-',
+        'Sell Run Up': '-'
+    }
+    
+    # Only look at the last bar
+    if len(buy_setup) > 0:
+        last_value = buy_setup[-1]
+        if last_value > 0:
+            current_phases['Buy Build Up'] = str(int(last_value))
+    
+    if len(sell_setup) > 0:
+        last_value = sell_setup[-1]
+        if last_value > 0:
+            current_phases['Sell Build Up'] = str(int(last_value))
+    
+    if len(buy_countdown) > 0:
+        last_value = buy_countdown[-1]
+        if last_value > 0 and last_value < 14:  # Exclude reset value 14
+            current_phases['Buy Run Up'] = str(int(last_value))
+    
+    if len(sell_countdown) > 0:
+        last_value = sell_countdown[-1]
+        if last_value > 0 and last_value < 14:  # Exclude reset value 14
+            current_phases['Sell Run Up'] = str(int(last_value))
+    
+    return current_phases
 
 def update_dashboard_data(stock_list):
     """Update data for all stocks in the dashboard"""
@@ -796,7 +796,7 @@ def main():
                 st.markdown("---")
                 st.markdown("#### Stock Details")
                 
-                # Style the dataframe
+                #Style the dataframe
                 def style_phases(x):
                     styles = pd.Series([''] * len(x), index=x.index)
                     
@@ -840,4 +840,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
