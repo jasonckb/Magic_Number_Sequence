@@ -44,10 +44,7 @@ def get_stocks_from_github(asset_type):
         "World Index": [
             "^SPX", "^NDX", "^RUT", "^SOX", "^TNX", "^DJI", "^HSI", "3032.HK", "XIN9.FGI", 
             "^N225", "^BSESN", "^KS11", "^TWII", "^GDAXI", "^FTSE", "^FCHI", "^BVSP", "EEMA", 
-            "EEM", "^HUI", "CL=F", "GC=F", "HG=F", "SI=F", "DX-Y.NYB", "EURUSD=X", "GBPUSD=X", 
-            "AUDUSD=X", "NZDUSD=X", "CADUSD=X", "CHF=X", "JPY=X", "CNY=X", "EURJPY=X", "GBPJPY=X", 
-            "AUDJPY=X", "NZDJPY=X", "CADJPY=X", "CHFJPY=X", "EURAUD=X", "EURNZD=X", "EURGBP=X", 
-            "EURCAD=X", "GBPAUD=X", "GBPNZD=X", "GBPCAD=X", "AUDNZD=X", "AUDCAD=X", "BTC=F", "ETH=F"
+            "EEM", "^HUI", "CL=F", "GC=F", "HG=F", "SI=F", "DX-Y.NYB", "BTC=F", "ETH=F"
         ]
     }
     
