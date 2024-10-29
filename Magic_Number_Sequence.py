@@ -806,7 +806,7 @@ def main():
                     # Style for Build Up phases (Setup)
                     if x.name in ['Buy Build Up', 'Sell Build Up']:
                         # Add background color for 9s
-                        styles[x == '9'] = 'font-weight: 900; color: dark Green; font-size: 20px; background-color: #90EE90'  # Light green
+                        styles[x == '9'] = 'font-weight: 900; color: black; font-size: 20px; background-color: #90EE90'  # Light green
                         # Normal styling for other digits
                         styles[x.astype(str).str.isdigit() & (x != '9')] = 'color: black; font-weight: bold'
                     
