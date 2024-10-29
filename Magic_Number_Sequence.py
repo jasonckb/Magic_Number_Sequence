@@ -603,48 +603,28 @@ def get_current_phase(df):
         'Sell Run Up': '-'
     }
     
+    # Only look at the last bar
     if len(buy_setup) > 0:
-        # Check if the current buy setup is still active
-        last_idx = len(buy_setup) - 1
-        if buy_setup[last_idx] > 0:
-            # Verify it's an active setup by checking if previous bars form a sequence
-            is_active = True
-            count = int(buy_setup[last_idx])
-            for i in range(count - 1):
-                if last_idx - i - 1 < 0 or buy_setup[last_idx - i - 1] != count - i - 1:
-                    is_active = False
-                    break
-            if is_active:
-                current_phases['Buy Build Up'] = str(count)
+        last_value = buy_setup[-1]
+        if last_value > 0:
+            current_phases['Buy Build Up'] = str(int(last_value))
     
     if len(sell_setup) > 0:
-        # Check if the current sell setup is still active
-        last_idx = len(sell_setup) - 1
-        if sell_setup[last_idx] > 0:
-            # Verify it's an active setup by checking if previous bars form a sequence
-            is_active = True
-            count = int(sell_setup[last_idx])
-            for i in range(count - 1):
-                if last_idx - i - 1 < 0 or sell_setup[last_idx - i - 1] != count - i - 1:
-                    is_active = False
-                    break
-            if is_active:
-                current_phases['Sell Build Up'] = str(count)
+        last_value = sell_setup[-1]
+        if last_value > 0:
+            current_phases['Sell Build Up'] = str(int(last_value))
     
     if len(buy_countdown) > 0:
-        # For countdown, we only show the current bar's count if it's part of an active sequence
-        last_idx = len(buy_countdown) - 1
-        if buy_countdown[last_idx] > 0:
-            current_phases['Buy Run Up'] = str(int(buy_countdown[last_idx]))
+        last_value = buy_countdown[-1]
+        if last_value > 0 and last_value < 14:  # Exclude reset value 14
+            current_phases['Buy Run Up'] = str(int(last_value))
     
     if len(sell_countdown) > 0:
-        # For countdown, we only show the current bar's count if it's part of an active sequence
-        last_idx = len(sell_countdown) - 1
-        if sell_countdown[last_idx] > 0:
-            current_phases['Sell Run Up'] = str(int(sell_countdown[last_idx]))
+        last_value = sell_countdown[-1]
+        if last_value > 0 and last_value < 14:  # Exclude reset value 14
+            current_phases['Sell Run Up'] = str(int(last_value))
     
     return current_phases
-
 
 def update_dashboard_data(stock_list):
     """Update data for all stocks in the dashboard"""
