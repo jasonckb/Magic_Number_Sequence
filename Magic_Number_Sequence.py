@@ -291,12 +291,11 @@ def calculate_td_sequential(df):
                 (buy_deferred[i] or  
                  (waiting_for_buy_13 and safe_compare(df['Low'].iloc[i], bar8_close_buy, '<=')))):
                 buy_setup_active = True
-                sell_setup_active = False  # Cancel any active sell setup
                 setup_start_idx = i
                 buy_setup[i] = 1
                 setup_one_at_current_bar = True
-                # Clear any existing sell setup counts
-                if i > 0 and sell_setup[i-1] > 0:
+                # Only clear incomplete sell setup counts
+                if i > 0 and sell_setup[i-1] > 0 and sell_setup[i-1] < 9:
                     sell_setup[i-1] = 0
         elif buy_setup_active:
             if check_buy_setup(df, i):
@@ -326,12 +325,11 @@ def calculate_td_sequential(df):
                 (sell_deferred[i] or  
                  (waiting_for_sell_13 and safe_compare(df['High'].iloc[i], bar8_close_sell, '>=')))):
                 sell_setup_active = True
-                buy_setup_active = False  # Cancel any active buy setup
                 setup_start_idx = i
                 sell_setup[i] = 1
                 setup_one_at_current_bar = True
-                # Clear any existing buy setup counts
-                if i > 0 and buy_setup[i-1] > 0:
+                # Only clear incomplete buy setup counts
+                if i > 0 and buy_setup[i-1] > 0 and buy_setup[i-1] < 9:
                     buy_setup[i-1] = 0
         elif sell_setup_active:
             if check_sell_setup(df, i):
