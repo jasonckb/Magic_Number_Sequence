@@ -355,7 +355,7 @@ def calculate_td_sequential(df):
         
         # Buy Countdown Phase
         if not sell_countdown_active:
-            if (buy_setup_completed_this_bar or buy_setup_complete) and not buy_countdown_active and not need_new_buy_setup:
+            if (buy_setup_completed_this_bar or buy_setup_complete) and not need_new_buy_setup:
                 if i >= 2 and safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<='):
                     buy_countdown_active = True
                     buy_setup_complete = False
@@ -391,7 +391,7 @@ def calculate_td_sequential(df):
         
         # Sell Countdown Phase
         if not buy_countdown_active:
-            if (sell_setup_completed_this_bar or sell_setup_complete) and not sell_countdown_active and not need_new_sell_setup:
+            if (sell_setup_completed_this_bar or sell_setup_complete) and not need_new_sell_setup:
                 if i >= 2 and safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>='):
                     sell_countdown_active = True
                     sell_setup_complete = False
