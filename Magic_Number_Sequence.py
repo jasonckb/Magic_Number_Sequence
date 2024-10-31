@@ -294,8 +294,9 @@ def calculate_td_sequential(df):
                 setup_start_idx = i
                 buy_setup[i] = 1
                 setup_one_at_current_bar = True
-                # Only clear incomplete sell setup counts
-                if i > 0 and sell_setup[i-1] > 0 and sell_setup[i-1] < 9:
+                # Only cancel active sell setup if it's not completed
+                if sell_setup_active and i > 0 and sell_setup[i-1] < 9:
+                    sell_setup_active = False
                     sell_setup[i-1] = 0
         elif buy_setup_active:
             if check_buy_setup(df, i):
@@ -315,10 +316,12 @@ def calculate_td_sequential(df):
                 else:
                     buy_setup[i] = 1
             else:
-                buy_setup_active = False
-                if i - setup_start_idx >= 4:
-                    buy_setup[setup_start_idx:i+1] = 0
-        
+                # Only reset if setup breaks before completion
+                if buy_setup[i-1] < 9:
+                    buy_setup_active = False
+                    if i - setup_start_idx >= 4:
+                        buy_setup[setup_start_idx:i+1] = 0
+
         # Sell Setup Phase
         if check_sell_flip(df, i):  # Valid sell price flip
             if (not sell_plus_without_setup or 
@@ -328,8 +331,9 @@ def calculate_td_sequential(df):
                 setup_start_idx = i
                 sell_setup[i] = 1
                 setup_one_at_current_bar = True
-                # Only clear incomplete buy setup counts
-                if i > 0 and buy_setup[i-1] > 0 and buy_setup[i-1] < 9:
+                # Only cancel active buy setup if it's not completed
+                if buy_setup_active and i > 0 and buy_setup[i-1] < 9:
+                    buy_setup_active = False
                     buy_setup[i-1] = 0
         elif sell_setup_active:
             if check_sell_setup(df, i):
@@ -349,9 +353,11 @@ def calculate_td_sequential(df):
                 else:
                     sell_setup[i] = 1
             else:
-                sell_setup_active = False
-                if i - setup_start_idx >= 4:
-                    sell_setup[setup_start_idx:i+1] = 0
+                # Only reset if setup breaks before completion
+                if sell_setup[i-1] < 9:
+                    sell_setup_active = False
+                    if i - setup_start_idx >= 4:
+                        sell_setup[setup_start_idx:i+1] = 0
         
         # Buy Countdown Phase
         if not sell_countdown_active:
