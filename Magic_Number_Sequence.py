@@ -31,14 +31,16 @@ def get_stocks_from_github(asset_type):
             "9961.HK", "9988.HK", "9999.HK"
          ],
         "US Stocks": ["^NDX", "^SPX",
-            "AAPN", "ABBV", "ABNB", "ACN", "ADBE", "AMD", "AMGN", "AMZN", "AMT", "ASML", "AVGO",
-            "BA", "BKNG", "BLK", "CAT", "CCL", "CDNS", "CEG", "CHTR", "COST", "CRM", "CRWD", "CVS", "CVX",
-            "DDOG", "DE", "DIS", "EQIX", "FTNT", "GE", "GILD", "GOOG", "GS", "HD", "IBM", "ICE",
-            "IDXX", "INTC", "INTU", "ISRG", "JNJ", "JPM", "KO", "LEN", "LLY", "LRCX", "MA", "META",
-            "MMM", "MRK", "MS", "MSFT", "MU", "NEE", "NFLX", "NRG", "NVO", "NVDA", "OXY", "PANW",
-            "PFE", "PG", "PGR", "PLTR", "PYPL", "QCOM", "REGN", "SBUX", "SMH", "SNOW", "SPGI",
-            "TEAM", "TJX", "TRAV", "TSM", "TSLA", "TTD", "TXN", "UNH", "UPS", "V", "VST", "VZ",
-            "WMT", "XLB", "XLE", "XLF", "XLI", "XLK", "XLP", "XLU", "XLV", "XLRE", "XLY", "XOM", "ZS"
+            "AAPN", "ABBV", "ABNB", "ACN", "ADBE", "AMD", "AMGN", "AMZN", "AMT", "ASML",
+            "AVGO", "BA", "BKNG", "BLK", "CAT", "CCL", "CDNS", "CEG", "CHTR", "COST", 
+            "CRM", "CRWD", "CVS", "CVX", "DDOG", "DE", "DIS", "EQIX", "FTNT", "GE",
+            "GILD", "GOOG", "GS", "HD", "IBM", "ICE", "IDXX", "INTC", "INTU", "ISRG",
+            "JNJ", "JPM", "KO", "LEN", "LLY", "LRCX", "MA", "META", "MMM", "MRK", 
+            "MS", "MSFT", "MU", "NEE", "NFLX", "NRG", "NVO", "NVDA", "OXY", "PANW",
+            "PFE", "PG", "PGR", "PLTR", "PYPL", "QCOM", "REGN", "SBUX", "SMH", "SNOW",
+            "SPGI", "TEAM", "TJX", "TRAV", "TSM", "TSLA", "TTD", "TXN", "UNH", "UPS",
+            "V", "VST", "VZ", "WMT", "XOM", "ZS",
+            "XLB", "XLE", "XLF", "XLI", "XLK", "XLP", "XLU", "XLV", "XLRE", "XLY"
         ],
         "World Index": [
             "^SPX", "^NDX", "^RUT", "^SOX", "^TNX", "^DJI", "^HSI", "3032.HK", "XIN9.FGI", 
