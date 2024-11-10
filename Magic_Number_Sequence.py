@@ -296,9 +296,9 @@ def calculate_td_sequential(df):
                 buy_setup[i] = 1
                 setup_one_at_current_bar = True
                 # Only cancel active sell setup if it's not completed
-                #if sell_setup_active and i > 0 and sell_setup[i-1] < 9:
-                    #sell_setup_active = False
-                    #sell_setup[i-1] = 0
+                if sell_setup_active and i > 0 and sell_setup[i-1] < 9:
+                    sell_setup_active = False
+                    sell_setup[i-1] = 0
         elif buy_setup_active:
             if check_buy_setup(df, i):
                 if i > 0 and buy_setup[i-1] > 0:
@@ -333,9 +333,9 @@ def calculate_td_sequential(df):
                 sell_setup[i] = 1
                 setup_one_at_current_bar = True
                 # Only cancel active buy setup if it's not completed
-                #if buy_setup_active and i > 0 and buy_setup[i-1] < 9:
-                    #buy_setup_active = False
-                    #buy_setup[i-1] = 0
+                if buy_setup_active and i > 0 and buy_setup[i-1] < 9:
+                    buy_setup_active = False
+                    buy_setup[i-1] = 0
         elif sell_setup_active:
             if check_sell_setup(df, i):
                 if i > 0 and sell_setup[i-1] > 0:
