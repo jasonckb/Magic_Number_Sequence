@@ -237,6 +237,9 @@ def calculate_td_sequential(df):
     bar8_close_buy = None
     bar8_close_sell = None
     
+    # Initialize 18-bar rule tracking
+    last_opposite_flip = {'buy': -1, 'sell': -1}
+    
     for i in range(len(df)):
         # Check TDST violations
         if buy_countdown_active and tdst.check_resistance_violation(df['Close'].iloc[i]):
@@ -248,6 +251,29 @@ def calculate_td_sequential(df):
             buy_plus_without_setup = False
             
         if sell_countdown_active and tdst.check_support_violation(df['Close'].iloc[i]):
+            sell_countdown_active = False
+            sell_setup_count = 0
+            sell_countdown_bars = []
+            waiting_for_sell_13 = False
+            bar8_close_sell = None
+            sell_plus_without_setup = False
+        
+        # Track opposite price flips for 18-bar rule
+        if check_buy_flip(df, i) and sell_countdown_active:
+            last_opposite_flip['sell'] = i
+        if check_sell_flip(df, i) and buy_countdown_active:
+            last_opposite_flip['buy'] = i
+            
+        # Check 18-bar rule
+        if buy_countdown_active and check_18_bar_rule(df, i, last_opposite_flip['buy'], True):
+            buy_countdown_active = False
+            buy_setup_count = 0
+            buy_countdown_bars = []
+            waiting_for_buy_13 = False
+            bar8_close_buy = None
+            buy_plus_without_setup = False
+            
+        if sell_countdown_active and check_18_bar_rule(df, i, last_opposite_flip['sell'], False):
             sell_countdown_active = False
             sell_setup_count = 0
             sell_countdown_bars = []
@@ -286,14 +312,6 @@ def calculate_td_sequential(df):
                             buy_setup_complete = True
                             buy_setup_completed_this_bar = True
                             need_new_buy_setup = False
-                            # Cancel opposite countdown on completion
-                            if sell_countdown_active:
-                                sell_countdown_active = False
-                                sell_setup_count = 0
-                                sell_countdown_bars = []
-                                waiting_for_sell_13 = False
-                                bar8_close_sell = None
-                                sell_plus_without_setup = False
                             resistance = get_tdst_level(df, setup_start_idx, i, True)
                             tdst.add_resistance(resistance, df.index[i])
                 else:
@@ -331,14 +349,6 @@ def calculate_td_sequential(df):
                             sell_setup_complete = True
                             sell_setup_completed_this_bar = True
                             need_new_sell_setup = False
-                            # Cancel opposite countdown on completion
-                            if buy_countdown_active:
-                                buy_countdown_active = False
-                                buy_setup_count = 0
-                                buy_countdown_bars = []
-                                waiting_for_buy_13 = False
-                                bar8_close_buy = None
-                                buy_plus_without_setup = False
                             support = get_tdst_level(df, setup_start_idx, i, False)
                             tdst.add_support(support, df.index[i])
                 else:
