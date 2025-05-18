@@ -376,7 +376,11 @@ def calculate_td_sequential(df):
                     bar8_close_buy = None
             elif buy_countdown_active:
                 if waiting_for_buy_13:
-                    if safe_compare(df['Low'].iloc[i], bar8_close_buy, '<='):
+                    # MODIFIED: For bar 13, need to match BOTH conditions:
+                    # 1. Close <= Low of 2 bars ago (standard rule)
+                    # 2. Close <= Close of bar 8 (bar 8 rule)
+                    if (safe_compare(df['Close'].iloc[i], df['Low'].iloc[i-2], '<=') and
+                        safe_compare(df['Close'].iloc[i], bar8_close_buy, '<=')):
                         buy_countdown[i] = 13
                         buy_countdown_active = False
                         waiting_for_buy_13 = False
@@ -412,7 +416,11 @@ def calculate_td_sequential(df):
                     bar8_close_sell = None
             elif sell_countdown_active:
                 if waiting_for_sell_13:
-                    if safe_compare(df['High'].iloc[i], bar8_close_sell, '>='):
+                    # MODIFIED: For bar 13, need to match BOTH conditions:
+                    # 1. Close >= High of 2 bars ago (standard rule)
+                    # 2. Close >= Close of bar 8 (bar 8 rule)
+                    if (safe_compare(df['Close'].iloc[i], df['High'].iloc[i-2], '>=') and
+                        safe_compare(df['Close'].iloc[i], bar8_close_sell, '>=')):
                         sell_countdown[i] = 13
                         sell_countdown_active = False
                         waiting_for_sell_13 = False
